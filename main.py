@@ -25,22 +25,33 @@ class MainWidget(QtWidgets.QWidget):
         directory = QtWidgets.QFileDialog.getOpenFileName(self, "Find Files",
                 QtCore.QDir.currentPath(),'*.flv')
         if directory:
-            self.tree.insertTopLevelItems(0, self.getFileItem())
+            self.tree.insertTopLevelItems(0, self.getFileItem(directory))
     
     @QtCore.Slot()
-    def getFileItem(self):
-        data = {"Project A": ["file_a.py", "file_a.txt", "something.xls"],
-                "Project B": ["file_b.csv", "photo.jpg"],
-                "Project C": []}
+    def getFileItem(self,flvFilePath):
+        # print(flvFilePath)
         items = []
-        for key, values in data.items():
-            item = QtWidgets.QTreeWidgetItem([key])
-            for value in values:
-                ext = value.split(".")[-1].upper()
-                child = QtWidgets.QTreeWidgetItem([value, ext])
-                item.addChild(child)
+        with open(flvFilePath[0], 'rt') as f:
+            data = f.read(1).hex()
+            
+            print(data)
+            item = QtWidgets.QTreeWidgetItem(["Flv Header"])
+            item.addChild(QtWidgets.QTreeWidgetItem(["hex", data]))
             items.append(item)
         return items
+
+        # data = {"Project A": ["file_a.py", "file_a.txt", "something.xls"],
+        #         "Project B": ["file_b.csv", "photo.jpg"],
+        #         "Project C": []}
+        
+        # for key, values in data.items():
+        #     item = QtWidgets.QTreeWidgetItem([key])
+        #     for value in values:
+        #         ext = value.split(".")[-1].upper()
+        #         child = QtWidgets.QTreeWidgetItem([value, ext])
+        #         item.addChild(child)
+        #     items.append(item)
+        # return items
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
