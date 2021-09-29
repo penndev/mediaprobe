@@ -25,8 +25,20 @@ class FlvTag:
         self.streamID = data[8:11]
     def setData(self,data):
         self.data = data
+        self.export()
     def setPreviousTagSize(self,data):
         self.tagSize = int.from_bytes(data, byteorder='big')
+    # 拆分出aac和avc数据
+    def export(self):
+        if(self.tagType == 18):
+            self.exportScript() 
+        elif self.tagType == 9:
+            self.exportVideo()
+        elif self.tagType == 8:
+            self.exportAudit()        
+        else:
+            pass
+    
 
 class Flv:
     header = None
@@ -45,9 +57,3 @@ class Flv:
                 tag.setData(f.read(tag.dataSize))
                 tag.setPreviousTagSize(f.read(4))
                 self.body.append(tag)
-
-flv = Flv("test.flv")
-print(flv.header.data)
-print(flv.body[0].tagType)
-print(flv.body[1].tagType)
-print(flv.body[2].tagType)
