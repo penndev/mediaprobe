@@ -1,28 +1,4 @@
 
-
-# typedef struct TS_packet_header
-# {
-# 	unsigned sync_byte                    : 8;	//同步字节, 固定为0x47,表示后面的是一个TS分组
-# 	unsigned transport_error_indicator    : 1;	//传输误码指示符
-# 	unsigned payload_unit_start_indicator : 1;	//效荷载单元起始指示符
-# 	unsigned transport_priority           : 1;	//传输优先, 1表示高优先级,传输机制可能用到，解码用不着
-# 	unsigned PID                          : 13;	//PID
-# 	unsigned transport_scrambling_control : 2;	//传输加扰控制
-# 	unsigned adaption_field_control       : 2;	//自适应控制 01仅含有效负载，10仅含调整字段，11含有调整字段和有效负载。为00解码器不进行处理
-# 	unsigned continuity_counter           : 4;	//连续计数器 一个4bit的计数器，范围0-15
-# } TS_packet_header;
-
-
-# if (adaption_field_control == '10' || adaption_field_control == '11') {
-#         adaption_fields() //调整字段的处理
-# }
-# if (adaption_field_control == '01' || adaption_field_control == '11') {
-# 	for(i = 0; i < N ; i++) //N值 = 184 - 调整字段的字节数
-#     {
-
-#     }
-# }
-
 class TsPacketHeader:
     def __init__(self,data) -> None:
         self.sync = data[0]
@@ -37,22 +13,41 @@ class TsPacketHeader:
 
 class TsPacket:
     def __init__(self,data) -> None:
+        'adaption 01{1}仅含有效负载，10{2}仅含调整字段，11{3}含有调整字段和有效负载。为00解码器不进行处理'
         self.header = TsPacket(data[0:4])
+        self.body = []
         if self.header.adaption >= 2:#存在调整字段
             self.adaptLen = data[4]
             self.adapt = data[5:5+self.adaptLen]
+            if self.header.adaption == 3:#同时存在es
+                self.body = data[5+self.adaptLen:]
+            else:
+                self.body = []
+        elif self.header.adaptLen == 1:
+            if self.header.payloadStart == 1:
+                startLen = 5 + data[5]
+                self.body = data[startLen:]
+            else:
+                self.body = data[4:]
 
 class Ts:
     def __init__(self,pwd) -> None:
         self.body = []
         with open(pwd,'rb') as tsf:
-            size = 0
             while True:
-                size += 1
                 tspck = tsf.read(188)
                 if tspck == b'':
                     break
                 self.body.append(TsPacket(tspck))
 
-# Ts("test.ts")
-print(TsPacketHeader([0x47, 0x40, 0x11,0x10]))
+# class PES:
+#     def __init__(self) -> None:
+#         pass
+
+ts = Ts("test.ts")
+
+for pkg in ts.body:
+    # 只取视频的pes
+
+
+# 读取所有视频的pes数据。
