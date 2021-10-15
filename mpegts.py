@@ -5,25 +5,23 @@ class TsPacketHeader:
         self.error = data[1] >> 7  #是否报错
         self.payloadStart = data[1] >> 6 & 1 
         self.priority = data[1] >> 5 & 1 #优先级
-        data[1] &= 0x1f
-        self.pid = int.from_bytes(data[1:3],"big")
+        self.pid = int.from_bytes([data[1] & 0x1f,data[2]],"big")
         self.scrambling = data[3] >> 6 #传输加扰。
         self.adaption = data[3] >> 4 & 3
         self.continuity = data[3] & 0x0f
 
 class TsPacket:
     def __init__(self,data) -> None:
-        'adaption 01{1}仅含有效负载，10{2}仅含调整字段，11{3}含有调整字段和有效负载。为00解码器不进行处理'
-        self.header = TsPacket(data[0:4])
+        self.header = TsPacketHeader(data[0:4])
         self.body = []
+        self.adaptLen = data[4]
         if self.header.adaption >= 2:#存在调整字段
-            self.adaptLen = data[4]
             self.adapt = data[5:5+self.adaptLen]
             if self.header.adaption == 3:#同时存在es
                 self.body = data[5+self.adaptLen:]
             else:
                 self.body = []
-        elif self.header.adaptLen == 1:
+        elif self.header.adaption == 1:
             if self.header.payloadStart == 1:
                 startLen = 5 + data[5]
                 self.body = data[startLen:]
@@ -40,14 +38,46 @@ class Ts:
                     break
                 self.body.append(TsPacket(tspck))
 
-# class PES:
-#     def __init__(self) -> None:
-#         pass
 
-ts = Ts("test.ts")
+#256
+VideoPid = 0x100 
 
-for pkg in ts.body:
-    # 只取视频的pes
+# 提取PES到文件
 
 
-# 读取所有视频的pes数据。
+class Pes:
+    def __init__(self,data) -> None:
+        self.start_code_prefix = data[0:3]
+        self.stream_id = data[3]
+        self.pes_packet_length = int.from_bytes(data[4:6],'big')
+        self.pes_action = data[6:8]
+        self.pes_header_data_length = data[8]
+        self.pes_header_data = data[9:9+self.pes_header_data_length]
+        self.body = data[9+self.pes_header_data_length:]
+        # print(self.pes_header_data)
+        # print(self.body)
+
+
+# 单信道
+# 不做多路复用
+class AnalyzePes:
+    def __init__(self) -> None:
+        self.PesVideo = []
+        TmpPes = []
+        ts = Ts("test.ts")
+        self.PesVideoCount = 1
+        for pkg in ts.body:
+            if pkg.header.pid == VideoPid:
+                if pkg.header.payloadStart == 1:
+                    if self.PesVideoCount != 1:
+                        self.PesVideo.append(Pes(TmpPes))
+                    self.PesVideoCount += 1
+                    TmpPes = []
+                TmpPes += pkg.body
+        self.PesVideo.append(Pes(TmpPes))
+
+pes = AnalyzePes()
+with open('test_mpegts.h264','wb') as ts:
+    for pkg in pes.PesVideo:
+        # print(pkg)
+        ts.write(bytes(pkg.body))

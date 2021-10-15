@@ -4,3 +4,4 @@ env
 *.h264
 *.flv
 *.ts
+*.pes
