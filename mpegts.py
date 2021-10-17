@@ -44,6 +44,8 @@ VideoPid = 0x100
 AudioPid = 0x101 
 
 # 提取PES到文件
+# 分析pes dts pts数据
+
 
 
 class Pes:
