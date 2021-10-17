@@ -41,6 +41,7 @@ class Ts:
 
 #256
 VideoPid = 0x100 
+AudioPid = 0x101 
 
 # 提取PES到文件
 
@@ -63,21 +64,38 @@ class Pes:
 class AnalyzePes:
     def __init__(self) -> None:
         self.PesVideo = []
-        TmpPes = []
-        ts = Ts("test.ts")
+        self.PesAudio = []
+
+        TmpPesVideo = []
+        TmpPesAudio = []
+        
         self.PesVideoCount = 1
+        self.PesAudioCount = 1
+
+        ts = Ts("test.ts")
         for pkg in ts.body:
             if pkg.header.pid == VideoPid:
                 if pkg.header.payloadStart == 1:
                     if self.PesVideoCount != 1:
-                        self.PesVideo.append(Pes(TmpPes))
+                        self.PesVideo.append(Pes(TmpPesVideo))
                     self.PesVideoCount += 1
-                    TmpPes = []
-                TmpPes += pkg.body
-        self.PesVideo.append(Pes(TmpPes))
+                    TmpPesVideo = []
+                TmpPesVideo += pkg.body
+            if pkg.header.pid == AudioPid:
+                if pkg.header.payloadStart == 1:
+                    if self.PesAudioCount != 1:
+                        self.PesAudio.append(Pes(TmpPesAudio))
+                    self.PesAudioCount += 1
+                    TmpPesAudio = []
+                TmpPesAudio += pkg.body
+        self.PesVideo.append(Pes(TmpPesVideo))
+        self.PesVideo.append(Pes(TmpPesAudio))
 
 pes = AnalyzePes()
 with open('test_mpegts.h264','wb') as ts:
     for pkg in pes.PesVideo:
-        # print(pkg)
+        ts.write(bytes(pkg.body))
+
+with open('test_mpegts.aac','wb') as ts:
+    for pkg in pes.PesAudio:
         ts.write(bytes(pkg.body))
