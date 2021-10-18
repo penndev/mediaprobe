@@ -43,15 +43,37 @@ class Ts:
 VideoPid = 0x100 
 
 # 提取PES到文件
-
-
-class Pes:
+class PesHeader:
     def __init__(self,data) -> None:
         self.start_code_prefix = data[0:3]
         self.stream_id = data[3]
         self.pes_packet_length = int.from_bytes(data[4:6],'big')
-        self.pes_action = data[6:8]
+
+        self.reserved = data[6] >> 6
+        self.pes_scrambling_control = data[6] >> 4 & 3
+        self.pes_priority = data[6] >> 3 & 1
+        self.copyright = data[6] >> 1 & 1
+        self.original_or_copy = data[6] & 1
+
+        self.pts_dts_flags = data[7] >> 6
+        self.escr_flags = data[7] >> 5 & 1
+        self.es_rate_flag = data[7] >> 4 & 1
+        self.dsm_trick_mode_flag = data[7] >> 3 & 1
+        self.additional_copy_info_flag = data[7] >> 2 & 1
+        self.pes_crc_flag = data[7] >> 1 & 1
+        self.pes_extension_flag = data[7] & 1
+
+        print(self.pts_dts_flags,self.escr_flags,self.es_rate_flag,self.dsm_trick_mode_flag)
+        print(self.additional_copy_info_flag,self.pes_crc_flag,self.pes_extension_flag)
+
+        exit()
+
         self.pes_header_data_length = data[8]
+        
+
+class Pes:
+    def __init__(self,data) -> None:
+        self.header = PesHeader(data[0:9])
         self.pes_header_data = data[9:9+self.pes_header_data_length]
         self.body = data[9+self.pes_header_data_length:]
         # print(self.pes_header_data)
