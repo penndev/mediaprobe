@@ -1,63 +1,57 @@
-from os import read
 from PySide6 import QtCore, QtWidgets, QtGui
+import flv
+
 
 class MainWidget(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.layout = QtWidgets.QVBoxLayout(self)
+        # 本次打开的flv struct
+        self.flvStruct = None 
+        # 顶部按钮组
+        self.btnSize = QtCore.QSize(80,40)
 
-        # 打开文件按钮
-        self.button = QtWidgets.QPushButton("Select File")
-        self.button.clicked.connect(self.openFile)
-        self.layout.addWidget(self.button)
+        self.showFlvFile()
+        self.showContent()
 
-        # 展示flv文件详情的面板
-        self.tree = QtWidgets.QTreeWidget()
-        self.tree.setColumnCount(2)
-        self.tree.setHeaderLabels(["flv Tag", "File Body"])
-        self.layout.addWidget(self.tree)
+    def showFlvFile(self):
+        '打开flv文件按钮'
+        self.buttonFlv = QtWidgets.QPushButton("打开文件")
+        self.buttonFlv.clicked.connect(self.openFlv)
+        self.buttonFlv.setStyleSheet("background-color: #FFF;border:none")
+        self.buttonFlv.setFixedSize(self.btnSize)
+        self.layout.addWidget(self.buttonFlv)
 
+    def showContent(self):
+        '展示flv文件详情的面板'
+        content = QtWidgets.QHBoxLayout()
+        self.tree = QtWidgets.QListWidget()
+        self.tree.clicked.connect(self.clickFlvItem)
+        content.addWidget(self.tree)
+        content.setStretchFactor(self.tree,1)
 
-    @QtCore.Slot()
-    def openFile(self):
-        directory = QtWidgets.QFileDialog.getOpenFileName(self, "Find Files", " ",'*.flv')
-        if directory:
-            self.tree.insertTopLevelItems(0, self.getFileItem(directory))
-    
-    @QtCore.Slot()
-    def getFileItem(self,flvFilePath):
-        items = []
-        with open(flvFilePath[0], 'rb') as f:
-            data = f.read(9)
-            data = data.hex(" ")
-            item = QtWidgets.QTreeWidgetItem(["Flv Header",data])
-            item.addChild(QtWidgets.QTreeWidgetItem(["PreviousTagSize", f.read(4).hex(" ") ]))
-            items.append(item)
-            while(True):
-                data = f.read(11)
-                if(data == b''):
-                    break
-                if(data[0] == 18):
-                    tagName = "Script Tag"
-                elif(data[0] == 9):
-                    tagName = "Video Tag"
-                elif(data[0] == 8):
-                    tagName = "Audit Tag"
-                else:
-                    break
-                item = QtWidgets.QTreeWidgetItem([tagName, data.hex(" ") ])
-                len = int.from_bytes(data[1:4], byteorder='big')
-                item.addChild(QtWidgets.QTreeWidgetItem(["body",f.read(len).hex(" ")]))
-                item.addChild(QtWidgets.QTreeWidgetItem(["PreviousTagSize", f.read(4).hex(" ") ]))
-                items.append(item)
-        return items
+        self.hexBrower = QtWidgets.QPlainTextEdit()
+        self.hexBrower.setReadOnly(True)
+        content.addWidget(self.hexBrower)
+        content.setStretchFactor(self.hexBrower,3)
 
+        self.layout.addLayout(content)
+
+    def openFlv(self):
+        pwd = QtWidgets.QFileDialog.getOpenFileName(self, "打开文件", " ",'*.flv')
+        self.flvStruct = flv.newFLv(pwd[0])
+        self.tree.addItems(self.flvStruct.getBody())
+
+    def clickFlvItem(self,item):
+        index = item.row()
+        data = self.flvStruct.body[index].data
+        self.hexBrower.setPlainText(data.hex(' '))
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
 
     widget = MainWidget()
-    widget.resize(800, 600)
+    widget.resize(960, 800)
     widget.show()
 
     app.exec()
