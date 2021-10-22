@@ -2,6 +2,9 @@ env
 .DS_Store
 .vscode
 __pycache__
+dist
+build
+main.spec
 *.aac
 *.h264
 *.flv
