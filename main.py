@@ -1,14 +1,14 @@
 from PySide6 import QtCore, QtWidgets, QtGui
-import flv
-import ctypes
-myappid = 'flv-analyze.github.pennilessfor@gmail' 
-ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+import ctypes,os,flv
+
+if os.name == 'nt':
+    myappid = 'flv-analyze.github.pennilessfor@gmail' 
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
 class MainWidget(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FLv-Analyze")
-        self.setWindowIcon(QtGui.QIcon("main.png"))
 
         self.layout = QtWidgets.QVBoxLayout(self)
         # 本次打开的flv struct
@@ -57,6 +57,7 @@ if __name__ == "__main__":
 
     widget = MainWidget()
     widget.resize(960, 800)
-    widget.show()
 
+    widget.show()
+    app.setWindowIcon(QtGui.QIcon("main.png"))
     app.exec()
