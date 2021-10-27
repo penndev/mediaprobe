@@ -6,69 +6,81 @@ if os.name == 'nt':
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
 class MainWidget(QtWidgets.QWidget):
+    'Flv-analyze 分析文件GUI控制'
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("FLv-Analyze")
-
+        # 应用程序主面板布局
         self.layout = QtWidgets.QVBoxLayout(self)
-        # 本次打开的flv struct
+
+        self.pBtnSize = QtCore.QSize(80,40)            # 默认按钮组大小配置
+        self.pOpenFlvBtn = QtWidgets.QPushButton("打开文件")  # 打开文件默认按钮
+        self.pTagListTree = QtWidgets.QListWidget()    # 展示当前所有Tag的列表组件
+        self.pTagInfoText = QtWidgets.QTextEdit()      # 展示当前点击后的tag info内容
+        self.pTagInfoHex  = QtWidgets.QPlainTextEdit() # 展示原始字节流
+
+        # 与FLV文件交互IO
         self.flvStruct = None 
-        # 顶部按钮组
-        self.btnSize = QtCore.QSize(80,40)
 
         self.showTop()
         self.showContent()
 
     def showTop(self):
-        '打开flv文件按钮'
-        self.buttonFlv = QtWidgets.QPushButton("打开文件")
-        self.buttonFlv.clicked.connect(self.openFlv)
-        self.buttonFlv.setStyleSheet("background-color: #FFF;border:none")
-        self.buttonFlv.setFixedSize(self.btnSize)
-        self.layout.addWidget(self.buttonFlv)
+        '顶部按钮组'
+        self.pOpenFlvBtn.clicked.connect(self.pOpenFlv)
+        self.pOpenFlvBtn.setStyleSheet("background-color: #FFF;border:none")
+        self.pOpenFlvBtn.setFixedSize(self.pBtnSize)
+        self.layout.addWidget(self.pOpenFlvBtn)
 
     def showContent(self):
-        '展示flv文件详情的面板'
-        content = QtWidgets.QHBoxLayout()
-
-        self.tree = QtWidgets.QListWidget()
-        self.tree.clicked.connect(self.clickFlvItem)
-        content.addWidget(self.tree)
-        content.setStretchFactor(self.tree,1)
-
+        '展示 flv tag 全部信息'
+        # 设置组件的默认展示属性。
+        self.pTagListTree.clicked.connect(self.pClickFlvItem)
+        self.pTagInfoText.setReadOnly(True)
+        self.pTagInfoHex.setReadOnly(True)
+        # 增加上下布局
         right = QtWidgets.QVBoxLayout()
-        self.infoBrower = QtWidgets.QPlainTextEdit()
-        self.infoBrower.setReadOnly(True)
-        right.addWidget(self.infoBrower)
-
-        self.hexBrower = QtWidgets.QPlainTextEdit()
-        self.hexBrower.setReadOnly(True)
-        right.addWidget(self.hexBrower)
-
+        right.addWidget(self.pTagInfoText)
+        right.setStretchFactor(self.pTagInfoText,3)
+        right.addWidget(self.pTagInfoHex)
+        right.setStretchFactor(self.pTagInfoHex,2)
+        # 左右布局
+        content = QtWidgets.QHBoxLayout()
+        content.addWidget(self.pTagListTree)
         content.addLayout(right)
+        content.setStretchFactor(self.pTagListTree,1)
         content.setStretchFactor(right,4)
-
+        # 增加布局
         self.layout.addLayout(content)
 
 
-    def openFlv(self):
+    def pOpenFlv(self):
+        '打开FLv文件操作。'
         pwd = QtWidgets.QFileDialog.getOpenFileName(self, "打开文件", " ",'*.flv')
         self.flvStruct = flv.newFLv(pwd[0])
-        self.tree.addItems(self.flvStruct.getBody())
+        self.pTagListTree.addItems(self.flvStruct.getBody())
 
-    def clickFlvItem(self,item):
+    def pClickFlvItem(self,item):
+        '点击某个tag list触发的事件'
         tag = self.flvStruct.body[item.row()]
+        # 填充解析后的详情
+        self.pTagInfoText.setText("Tag Type: " + str(tag.tagType))
+        self.pTagInfoText.append("Tag Data Size: " + str(tag.dataSize))
+        self.pTagInfoText.append("Tag TimeStamp: " + str(tag.timeStamp))
+        self.pTagInfoText.append("Tag TimeStamp Extended: " + str(tag.timeStampExtended))
+        self.pTagInfoText.append("Tag streamID: " + str(tag.streamID))
 
-        self.infoBrower.setPlainText("hello world")
-        
-        self.hexBrower.setPlainText(tag.data.hex(' '))
+        # self.previousTagSize = 0
+        # 填充hex当前tag的所有数据。
+        self.pTagInfoHex.setPlainText(tag.data.hex(' '))
 
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication()
-    app.setWindowIcon(QtGui.QIcon("flv.png"))
-
+    app.setWindowIcon(QtGui.QIcon("icon.png"))
+    
     widget = MainWidget()
+    widget.setWindowTitle("FLv-Analyze")
     widget.resize(960, 800)
     widget.show()
     
