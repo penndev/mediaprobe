@@ -22,6 +22,8 @@ class MainWidget(QtWidgets.QWidget):
         # 与FLV文件交互IO
         self.flvStruct = None 
 
+
+
         self.showTop()
         self.showContent()
 
@@ -95,6 +97,19 @@ if __name__ == "__main__":
     widget.setWindowTitle("FLv-Analyze")
     widget.resize(960, 800)
     widget.show()
+
+
+    mb = QtWidgets.QMenuBar()
+    mb.clear()
+
+    m =  QtWidgets.QMenu("one")
+    m.addAction("file")
+
+    mb.addMenu(m)
+    mb.show()
+
+
+
 
 
     app.exec()
