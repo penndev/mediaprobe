@@ -58,19 +58,29 @@ class MainWidget(QtWidgets.QWidget):
         '打开FLv文件操作。'
         pwd = QtWidgets.QFileDialog.getOpenFileName(self, "打开文件", " ",'*.flv')
         self.flvStruct = flv.newFLv(pwd[0])
-        self.pTagListTree.addItems(self.flvStruct.getBody())
+
+        self.pTagListTree.addItem(self.flvStruct.header.name)
+        self.pTagListTree.addItems(self.flvStruct.tagList)
 
     def pClickFlvItem(self,item):
         '点击某个tag list触发的事件'
-        tag = self.flvStruct.body[item.row()]
+
+        # 如果是FLV header 则特殊处理
+        if(item.row() == 0):
+            self.pTagInfoHex.setPlainText(self.flvStruct.header.data.hex(' '))
+            return
+
+
+
+        tag = self.flvStruct.body[item.row()-1]
         # 填充解析后的详情
         self.pTagInfoText.setText("Tag Type: " + str(tag.tagType))
         self.pTagInfoText.append("Tag Data Size: " + str(tag.dataSize))
         self.pTagInfoText.append("Tag TimeStamp: " + str(tag.timeStamp))
         self.pTagInfoText.append("Tag TimeStamp Extended: " + str(tag.timeStampExtended))
         self.pTagInfoText.append("Tag streamID: " + str(tag.streamID))
-
-        # self.previousTagSize = 0
+        self.pTagInfoText.append("PreviousTagSize: " + str(tag.previousTagSize))
+        
         # 填充hex当前tag的所有数据。
         self.pTagInfoHex.setPlainText(tag.data.hex(' '))
 
@@ -78,10 +88,17 @@ class MainWidget(QtWidgets.QWidget):
 if __name__ == "__main__":
     app = QtWidgets.QApplication()
     app.setWindowIcon(QtGui.QIcon("icon.png"))
-    
+    app.setApplicationName("FLv-Analyze")
+
+
     widget = MainWidget()
     widget.setWindowTitle("FLv-Analyze")
     widget.resize(960, 800)
     widget.show()
-    
+
+
     app.exec()
+
+
+
+
