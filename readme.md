@@ -12,6 +12,6 @@
 
 
 
-pyinstaller --clean --windowed -i icon.png -n Flv-Analyze  -F main.py
+`pyinstaller --clean --windowed -i icon.png -n Flv-Analyze  -F main.py`
 
-pyinstaller --windowed  -i icon.png -n Flv-Analyze  main.py
+`pyinstaller --windowed  -i icon.png -n Flv-Analyze  main.py`
