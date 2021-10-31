@@ -1,11 +1,16 @@
 from PySide6 import QtCore, QtWidgets, QtGui
 import ctypes, os, flv
 
-if os.name == 'nt':
-    myappid = 'flv-analyze.github.pennilessfor@gmail' 
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
 NAME = "FLv-Analyze"
+ICON = "icon.png"
+
+MyAppId = 'flv-analyze.github.pennilessfor@gmail' 
+
+if os.name == 'nt':
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(MyAppId)
+
+
 
 class pMainWidget(QtWidgets.QWidget):
     'Flv-analyze 分析文件GUI控制'
@@ -91,7 +96,7 @@ class pMainWindow(QtWidgets.QMainWindow):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication()
-    app.setWindowIcon(QtGui.QIcon("icon.png"))
+    app.setWindowIcon(QtGui.QIcon(ICON))
 
     window = pMainWindow()
     window.show()
