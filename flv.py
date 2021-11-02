@@ -10,7 +10,6 @@ class FlvTag:
         self.timeStamp = int.from_bytes(data[4:7], byteorder='big')
         self.timeStampExtended = data[7]
         self.streamID = int.from_bytes(data[8:11], byteorder='big')
-        # self.previousTagSize = 0
 
     def setData(self,data):
         '解码媒体源数据'
@@ -42,7 +41,6 @@ class FlvStruct:
             tag = FlvTag(header)
             tag.setData(flv.read(tag.dataSize + 4))
             self.body.append(tag)
-
             # 展示标签列表
             self.tagList.append(tag.getTagType())
             
