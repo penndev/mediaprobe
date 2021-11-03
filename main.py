@@ -1,4 +1,4 @@
-from PySide6 import QtCore, QtWidgets, QtGui
+from PySide6 import  QtWidgets, QtGui
 import os, flv,math
 
 
@@ -34,7 +34,7 @@ class pMainWidget(QtWidgets.QWidget):
         # 展示原始字节流
         self.pTagInfoHex = QtWidgets.QTableWidget()
         self.pTagInfoHex.setColumnCount(16)
-        self.pTagInfoHex.setHorizontalHeaderLabels(["0x00","0x01", "0x02", "0x03","0x04","0x05","0x06","0x07","0x08","0x09","0x0A","0x0B","0x0C","0x0D","0x0E","0x0F"])
+        self.pTagInfoHex.setHorizontalHeaderLabels(["0","1", "2", "3","4","5","6","7","8","9","a","b","c","d","e","f"])
         self.pTagInfoHex.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
 
         # 增加上下布局
@@ -60,10 +60,10 @@ class pMainWidget(QtWidgets.QWidget):
         self.pTagListTree.addItem(self.flvStruct.header.name)
         self.pTagListTree.addItems(self.flvStruct.tagList)
 
-        self.pTagListTree.setStyleSheet("QListWidget::item {border-bottom:1px solid gray; margin-bottom:8px;font-size:26px; font-weight:900; }")
-
     def pClickFlvItem(self,item):
         '点击某个tag list触发的事件'
+        self.pTagInfoText.clearContents()
+        self.pTagInfoHex.clearContents()
         # 如果是FLV header 则特殊处理
         if(item.row() == 0):
             return self.pClickFlvHeader()
@@ -98,12 +98,13 @@ class pMainWidget(QtWidgets.QWidget):
 
     def pClickFlvHeader(self):
         headLs = [
-            ("FLV Sign","HEX[0:4]",self.flvStruct.header.data[0:4].hex()),
-            ("Version","HEX[4]", hex(self.flvStruct.header.data[4])),
-            ("Type Flags","HEX[5]", hex(self.flvStruct.header.data[5]) + " |video(byte&1)|audio(byte&4)|" ),
-            ("Data offset","HEX[6:9]",self.flvStruct.header.data[6:9].hex()),
-            ("PreviousTagSize","HEX[9:12]",self.flvStruct.header.data[9:12].hex(" "))
+            ("FLV Sign","HEX[0:4]",self.flvStruct.header.data[0:3].hex(" ")),
+            ("Version","HEX[4]", hex(self.flvStruct.header.data[3])),
+            ("Type Flags","HEX[5]", hex(self.flvStruct.header.data[4]) + " |video(byte&1)|audio(byte&4)|" ),
+            ("Data offset","HEX[6:9]",self.flvStruct.header.data[5:9].hex(" ")),
+            ("PreviousTagSize","HEX[9:12]",self.flvStruct.header.data[9:13].hex(" "))
         ]
+        
         self.pTagInfoText.setRowCount(len(headLs))
         for i, (filed, position,info) in enumerate(headLs):
             c = 0
@@ -112,7 +113,7 @@ class pMainWidget(QtWidgets.QWidget):
             self.pTagInfoText.setItem(i, c,QtWidgets.QTableWidgetItem(position))
             c+=1
             self.pTagInfoText.setItem(i, c,QtWidgets.QTableWidgetItem(info))
-
+        # print(self.flvStruct.header.data,len(self.flvStruct.header.data))
         self.pTagInfoHex.setRowCount(math.ceil(len(self.flvStruct.header.data)/16))
         n = 0
         for i in self.flvStruct.header.data:
@@ -133,10 +134,16 @@ class pMainWindow(QtWidgets.QMainWindow):
     def pSetMenuBar(self):
         '设置菜单栏'
         menu = self.menuBar()
-        menuFlv = menu.addMenu("File")
-        actionOpen = QtGui.QAction('Open', self)
+        menuFlv = menu.addMenu("File (文件)")
+        actionOpen = QtGui.QAction('Open Flv File', self)
         actionOpen.triggered.connect(self.pCentent.pOpenFlv)
         menuFlv.addAction(actionOpen)
+
+        menuHelp = menu.addMenu("Help (帮助)")
+        actionHelp = QtGui.QAction('about me', self)
+        # actionHelp.triggered.connect(self.pCentent.pOpenFlv)
+        menuHelp.addAction(actionHelp)
+
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication()
