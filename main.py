@@ -1,14 +1,14 @@
 from PySide6 import  QtWidgets, QtGui
-import os, flv,math
+import  flv,math
 
 
 NAME = "FLv-Analyze"
 ICON = "icon.png"
 MYAPPID = 'flv-analyze.penndev.github'
 
-if os.name == 'nt':
-    import ctypes
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(MYAPPID)
+# if os.name == 'nt':
+#     import ctypes
+#     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(MYAPPID)
 
 
 class pMainWidget(QtWidgets.QWidget):

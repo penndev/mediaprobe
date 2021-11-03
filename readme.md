@@ -9,11 +9,7 @@ python3 -m venv env
 
 source env/bin/activate
 
-pip install -i https://mirrors.aliyun.com/pypi/simple/ requirements.txt
-
-# pyinstaller --clean --windowed -i icon.png -n Flv-Analyze  -F main.py
-
-pyinstaller --windowed  -i icon.ico -n Flv-Analyze  main.py
-```
+pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
 pyinstaller --name="Flv-Analyze" --icon icon.ico --windowed --onefile main.py
+```
