@@ -28,12 +28,10 @@ class FlvHeader:
         self.previousTagSize = int.from_bytes(self.data[9:14], byteorder='big')
 
 class FlvStruct:
-    header = None
-    body = []
-
-    tagList = []
     def __init__(self,flv) -> None:
         self.header = FlvHeader(flv.read(13))
+        self.body = []
+        self.tagList = []
         while(True):
             header = flv.read(11)
             if(header == b''):
@@ -43,8 +41,6 @@ class FlvStruct:
             self.body.append(tag)
             # 展示标签列表
             self.tagList.append(tag.getTagType())
-            
-
 
 def newFLv(pwd):
     with open(pwd, 'rb') as flv:

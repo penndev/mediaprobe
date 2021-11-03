@@ -51,20 +51,23 @@ class pMainWidget(QtWidgets.QWidget):
         content.setStretchFactor(self.pTagListTree,1)
         content.setStretchFactor(right,4)
         self.layout.addLayout(content)
-
+    def pClearFlv(self):
+        self.pTagListTree.clear()
     def pOpenFlv(self):
         '打开FLv文件操作。'
         pwd = QtWidgets.QFileDialog.getOpenFileName(self, "打开文件", " ",'*.flv')
         self.flvStruct = flv.newFLv(pwd[0])
-
+        self.pTagListTree.clear()
         self.pTagListTree.addItem(self.flvStruct.header.name)
         self.pTagListTree.addItems(self.flvStruct.tagList)
+
 
     def pClickFlvItem(self,item):
         '点击某个tag list触发的事件'
         self.pTagInfoText.clearContents()
         self.pTagInfoHex.clearContents()
         # 如果是FLV header 则特殊处理
+        print(item.row())
         if(item.row() == 0):
             return self.pClickFlvHeader()
         tag = self.flvStruct.body[item.row()-1]
@@ -87,7 +90,6 @@ class pMainWidget(QtWidgets.QWidget):
             self.pTagInfoText.setItem(i, c,QtWidgets.QTableWidgetItem(position))
             c+=1
             self.pTagInfoText.setItem(i, c,QtWidgets.QTableWidgetItem(info))
-
         # 填充hex当前tag的所有数据。
         self.pTagInfoHex.setRowCount(math.ceil(len(tag.data)/16))
         n = 0
@@ -104,7 +106,6 @@ class pMainWidget(QtWidgets.QWidget):
             ("Data offset","HEX[6:9]",self.flvStruct.header.data[5:9].hex(" ")),
             ("PreviousTagSize","HEX[9:12]",self.flvStruct.header.data[9:13].hex(" "))
         ]
-        
         self.pTagInfoText.setRowCount(len(headLs))
         for i, (filed, position,info) in enumerate(headLs):
             c = 0
@@ -113,7 +114,6 @@ class pMainWidget(QtWidgets.QWidget):
             self.pTagInfoText.setItem(i, c,QtWidgets.QTableWidgetItem(position))
             c+=1
             self.pTagInfoText.setItem(i, c,QtWidgets.QTableWidgetItem(info))
-        # print(self.flvStruct.header.data,len(self.flvStruct.header.data))
         self.pTagInfoHex.setRowCount(math.ceil(len(self.flvStruct.header.data)/16))
         n = 0
         for i in self.flvStruct.header.data:
@@ -130,26 +130,33 @@ class pMainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.pCentent)
         self.resize(960, 800)
         self.setWindowTitle(NAME)
+        self.show()
 
     def pSetMenuBar(self):
         '设置菜单栏'
-        menu = self.menuBar()
-        menuFlv = menu.addMenu("File (文件)")
-        actionOpen = QtGui.QAction('Open Flv File', self)
+        actionOpen = QtGui.QAction("&打开文件", self)
         actionOpen.triggered.connect(self.pCentent.pOpenFlv)
-        menuFlv.addAction(actionOpen)
 
-        menuHelp = menu.addMenu("Help (帮助)")
-        actionHelp = QtGui.QAction('about me', self)
-        # actionHelp.triggered.connect(self.pCentent.pOpenFlv)
+        actionClear = QtGui.QAction("&清理", self)
+        actionClear.triggered.connect(self.pCentent.pClearFlv)
+
+        actionHelp = QtGui.QAction("&关于", self)
+        actionHelp.triggered.connect(self.pOpenLink)
+
+        menuFlv = self.menuBar().addMenu("&文件")
+        menuFlv.addAction(actionOpen)
+        menuFlv.addAction(actionClear)
+        menuHelp = self.menuBar().addMenu("&帮助")
         menuHelp.addAction(actionHelp)
+
+    def pOpenLink(self):
+        QtGui.QDesktopServices.openUrl("https://github.com/penndev/flv-analyze")
+
 
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication()
-    app.setWindowIcon(QtGui.QIcon(ICON))
 
     window = pMainWindow()
-    window.show()
 
     app.exec()

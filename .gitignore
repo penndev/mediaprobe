@@ -4,7 +4,7 @@ env
 __pycache__
 dist
 build
-main.spec
+*.spec
 *.aac
 *.h264
 *.flv
