@@ -40,14 +40,8 @@ class Ts:
                     break
                 self.body.append(TsPacket(tspck))
 
-# class PES:
-#     def __init__(self) -> None:
-#         pass
 
 ts = Ts("test.ts")
 
-# for pkg in ts.body:
-    # 只取视频的pes
-
-
-# 读取所有视频的pes数据。
+for pkg in ts.body:
+    pass
