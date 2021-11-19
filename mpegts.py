@@ -43,9 +43,6 @@ class Ts:
                     break
                 self.body.append(TsPacket(tspck))
 
-class TS:
-    Sync = 0x47
-
 def PAT():
     bt = bytearray([0xff]*188)
     hex = [
@@ -70,12 +67,11 @@ def PMT():
     return bt
 
 class PES():
-
     _StartCode = [0x00, 0x00, 0x01]
     _StreamId = {"video":0xe0,"audit":0xc0}
     _PESLength = [0x00,0x00]
     def __init__(self,pts,dts) -> None:
-        self.data = bytearray([0]*188)
+        self.data = bytearray([0]*19)
         self.data[0:3] = [0x00, 0x00, 0x01]
         self.data[3] = 0xe0
         self.data[4:6] = [0x00,0x00]
@@ -101,6 +97,48 @@ class PES():
         self.data[17] = gc >> 8
         self.data[18] = gc & 0xff
 
-a = PES(131940,126000)
+class PACKET():
+    VIDEO_COUNT=0
+    AUDIT_COUNT=0
+    def __init__(self,r,dts) :
+        pcrflag = True
+        while True:
+            if(len(r) == 0):
+                break
+            if pcrflag:
+                b = self.tsHeader()
+                b += self.tsAdaptation(dts)
+            else:
+                b = self.tsHeader()
+            end = 188 - len(b)
+            b += r[:end]
+            r = r[end:]
+            print(len(b),end,len(r))
 
-print(a.data.hex(" "))
+    def tsAdaptation(self,pcr):
+        h = bytearray(7)
+        # 8bit 表示是否时间戳发生变化
+        # 7bit 表示pes起始包
+        # 6bit 表示优先级，不管。
+        # 5bit 表示 是否有pcr
+        h[0] = (1 << 7) | (1 << 6) | (1<<4)
+        # 4bit 表示 是否有ocpr
+        # 3bit 表示 是否有-
+        # 2bit 表示 是否有私域字段
+        # 1bit 表示 是否有拓展数据
+        h[1] = pcr >> 25
+        h[2] = (pcr >> 17) & 0xff
+        h[3] = (pcr >> 9) & 0xff
+        h[4] = (pcr >> 1) & 0xff
+        h[5] = ((pcr & 0x1) << 7) | 0x7e
+        h[6] = 0x00
+        return h
+    def tsHeader(self):
+        h = bytearray(4)
+        h[0] = 0x47
+        h[1] = 1 << 6
+        h[1] = h[1] | 1
+        h[3] = 3 << 4
+        h[3] = h[3] | self.VIDEO_COUNT
+        self.VIDEO_COUNT = (self.VIDEO_COUNT + 1 ) % 16
+        return h
