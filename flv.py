@@ -106,5 +106,5 @@ with open("testgen.ts",'wb') as h:
             pts = dts + (tag.compositionTime * h264DefaultHZ)
             peshead = mpegts.PES(pts,dts)
             pes = peshead.data + bytes(tag.nalu)
-            h.write(mpegts.PACKET(pes,dts))
-            exit()
+            h.write(mpegts.PACKET(pes,dts).getPack())
+            # exit()

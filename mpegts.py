@@ -102,6 +102,7 @@ class PACKET():
     AUDIT_COUNT=0
     def __init__(self,r,dts) :
         pcrflag = True
+        self.pack = bytearray()
         while True:
             if(len(r) == 0):
                 break
@@ -113,7 +114,13 @@ class PACKET():
             end = 188 - len(b)
             b += r[:end]
             r = r[end:]
-            print(len(b),end,len(r))
+            if len(b) < 188 :
+                # 需要填充0 到不足的字段。
+                b += bytearray([0]*(188-len(b)))
+            self.pack += b
+    def getPack(self):
+        return self.pack
+    
 
     def tsAdaptation(self,pcr):
         h = bytearray(7)
