@@ -43,6 +43,19 @@ class Ts:
                     break
                 self.body.append(TsPacket(tspck))
 
+def SDT():
+    bt = bytearray([0xff]*188)
+    hex = [
+        0x47, 0x40, 0x11, 0x10, 
+        0x00, 0x42, 0xF0, 0x25, 0x00, 0x01, 0xC1, 0x00, 0x00, 0xFF, 
+        0x01, 0xFF, 0x00, 0x01, 0xFC, 0x80, 0x14, 0x48, 0x12, 0x01, 
+        0x06, 0x46, 0x46, 0x6D, 0x70, 0x65, 0x67, 0x09, 0x53, 0x65, 
+        0x72, 0x76, 0x69, 0x63, 0x65, 0x30, 0x31, 0x77, 0x7C, 0x43, 
+        0xCA
+    ]
+    bt[0:45] = hex
+    return bt
+
 def PAT():
     bt = bytearray([0xff]*188)
     hex = [
@@ -51,7 +64,7 @@ def PAT():
         0x00, 0xB0, 0x0D, 0x00, 0x01, 0xC1, 0x00, 0x00, 0x00, 0x01, 
         0xF0, 0x00, 0x2A, 0xB1, 0x04, 0xB2
     ]
-    bt[0:20] = hex
+    bt[0:21] = hex
     return bt
 
 def PMT():
@@ -63,7 +76,7 @@ def PMT():
         0xF0, 0x00, 0x1B, 0xE1, 0x00, 0xF0, 0x00, 0x0F, 0xE1, 0x01,
         0xF0, 0x00, 0x2F, 0x44, 0xB9, 0x9B
     ]
-    bt[0:30] = hex
+    bt[0:31] = hex
     return bt
 
 class PES():
@@ -106,46 +119,63 @@ class PACKET():
         while True:
             if(len(r) == 0):
                 break
-            if pcrflag:
-                b = self.tsHeader()
-                b += self.tsAdaptation(dts)
+            pack = bytearray([0xff]*188)
+            index = 4
+            pack[0:index] = self.tsHeader(pcrflag)
+            if pcrflag:# 只有首package才增加adaption
+                adapt = self.tsAdaptation(dts)
+                adaptL = len(adapt)
+                indexL = index+adaptL
+                pack[index:indexL] = adapt
+                index = indexL
+                pcrflag = False
+
+            need = 188 - index
+
+            if need > len(r):
+                pack[4] = 188 - index - len(r) - 1 # 填充长度 减去自身
+                index += pack[4] + 1 # 1 是自身长度。
+                pack[index:188] = r
             else:
-                b = self.tsHeader()
-            end = 188 - len(b)
-            b += r[:end]
-            r = r[end:]
-            if len(b) < 188 :
-                # 需要填充0 到不足的字段。
-                b += bytearray([0]*(188-len(b)))
-            self.pack += b
+                pack[index:188] = r[:need]
+            r = r[need:]
+            self.pack += pack
+            if(len(pack) != 188):
+                print("debug-here",len(pack),index,pack[4],len(r))
+                exit()
     def getPack(self):
         return self.pack
     
 
     def tsAdaptation(self,pcr):
-        h = bytearray(7)
+        h = bytearray(8)
         # 8bit 表示是否时间戳发生变化
         # 7bit 表示pes起始包
         # 6bit 表示优先级，不管。
         # 5bit 表示 是否有pcr
-        h[0] = (1 << 7) | (1 << 6) | (1<<4)
+        h[1] =  (1 << 6) | (1<<4)
         # 4bit 表示 是否有ocpr
         # 3bit 表示 是否有-
         # 2bit 表示 是否有私域字段
         # 1bit 表示 是否有拓展数据
-        h[1] = pcr >> 25
-        h[2] = (pcr >> 17) & 0xff
-        h[3] = (pcr >> 9) & 0xff
-        h[4] = (pcr >> 1) & 0xff
-        h[5] = ((pcr & 0x1) << 7) | 0x7e
-        h[6] = 0x00
+        h[2] = pcr >> 25
+        h[3] = (pcr >> 17) & 0xff
+        h[4] = (pcr >> 9) & 0xff
+        h[5] = (pcr >> 1) & 0xff
+        h[6] = ((pcr & 0x1) << 7) | 0x7e
+        h[7] = 0x00
+        h[0] = 7
         return h
-    def tsHeader(self):
+    def tsHeader(self,adapta=False):
+        'adapta 是否有拓展字段'
         h = bytearray(4)
         h[0] = 0x47
-        h[1] = 1 << 6
-        h[1] = h[1] | 1
-        h[3] = 3 << 4
-        h[3] = h[3] | self.VIDEO_COUNT
+        if adapta:
+            h[1] = 1 << 6
+            h[3] = 3 << 4
+        else:
+            h[3] = 1 << 4
+        h[1] |= 1
+        h[3] |= self.VIDEO_COUNT
         self.VIDEO_COUNT = (self.VIDEO_COUNT + 1 ) % 16
         return h

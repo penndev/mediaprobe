@@ -45,15 +45,13 @@ class FlvTag:
                 if (self.avcPacketType == 1):
                     while(True):
                         naluLen = int.from_bytes(data[i:i+4], byteorder='big')
-                        if(i == 5):
-                            self.nalu = self.nalu + [0,0,0,1]
-                        else:
-                            self.nalu = self.nalu + [0,0,1]
                         i = i + 4
-                        self.nalu = self.nalu + list(data[i:i+naluLen])
-                        i = i + naluLen
                         if(len(data) <= i):
                             break
+                        self.nalu += [0,0,0,1]
+                        self.nalu += list(data[i:i+naluLen])
+                        i = i + naluLen
+
 
         self.previousTagSize = int.from_bytes(data[self.dataSize:], byteorder='big')
 
@@ -95,16 +93,22 @@ h264DefaultHZ = 90
 
 import mpegts
 
-with open("testgen.ts",'wb') as h:
+
+
+with open("testgen11.ts",'wb') as h:
+    h.write(mpegts.SDT())
     h.write(mpegts.PAT())
     h.write(mpegts.PMT())
     for tag in ts.body:
         if tag.tagType == 9:
             if tag.nalu == []:
                 continue
+
+            #Pes层
             dts = tag.timeStamp * h264DefaultHZ
             pts = dts + (tag.compositionTime * h264DefaultHZ)
             peshead = mpegts.PES(pts,dts)
             pes = peshead.data + bytes(tag.nalu)
+
             h.write(mpegts.PACKET(pes,dts).getPack())
-            # exit()
+
