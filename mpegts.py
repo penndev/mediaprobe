@@ -83,11 +83,12 @@ class PES():
     _StartCode = [0x00, 0x00, 0x01]
     _StreamId = {"video":0xe0,"audit":0xc0}
     _PESLength = [0x00,0x00]
-    def __init__(self,pts,dts) -> None:
+    def __init__(self,pts,dts,dl) -> None:
         self.data = bytearray([0]*19)
         self.data[0:3] = [0x00, 0x00, 0x01]
         self.data[3] = 0xe0
-        self.data[4:6] = [0x00,0x00]
+        PesLen = 13 + dl
+        self.data[4:6] = [PesLen >> 8,PesLen & 0xff]
         self.data[6] = 0x80 # pes-info信息
         self.data[7] = 0xc0 # 默认存在dts和pts
         self.data[8] = 0x0a # len
@@ -113,8 +114,8 @@ class PES():
 class PACKET():
     VIDEO_COUNT=0
     AUDIT_COUNT=0
-    def __init__(self,r,dts) :
-        pcrflag = True
+    def __init__(self,r,dts,keyfram) :
+        pcrflag = keyfram
         self.pack = bytearray()
         while True:
             if(len(r) == 0):
@@ -129,7 +130,8 @@ class PACKET():
                 pack[index:indexL] = adapt
                 index = indexL
                 pcrflag = False
-
+            # print(list(pack))
+            # exit()
             need = 188 - index
 
             if need > len(r):
@@ -146,7 +148,6 @@ class PACKET():
     def getPack(self):
         return self.pack
     
-
     def tsAdaptation(self,pcr):
         h = bytearray(8)
         # 8bit 表示是否时间戳发生变化

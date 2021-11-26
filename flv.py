@@ -16,6 +16,10 @@ h.write(bytes(tag.tag.Data))
 0,0,0,1 + nalu.data
 '''
 
+naluHead = bytearray([0,0,0,1])
+
+naluSeq = bytearray()
+naluSeqTmp = bytearray()
 
 class FlvTag:
     tagTypeItem = {8:"Audit Tag",9:"Video Tag",18:"Script Tag"}
@@ -33,26 +37,45 @@ class FlvTag:
         self.nalu = []
 
     def setData(self,data):
+        global naluSeq
+        global naluSeqTmp
+        naluSeqTmp = bytearray()
         '解码媒体源数据'
         self.data += data
         if(self.tagType == 9):
             self.frameType = data[0] >> 4
+            # print(data[0],self.frameType)
             self.codecID = data[0] & 0x0f
             if(self.codecID == 7):
                 self.avcPacketType = data[1]
                 self.compositionTime = int.from_bytes(data[2:5], byteorder='big')
                 i = 5
                 if (self.avcPacketType == 1):
+                    # self.nalu = data[i:]
                     while(True):
                         naluLen = int.from_bytes(data[i:i+4], byteorder='big')
                         i = i + 4
                         if(len(data) <= i):
                             break
-                        self.nalu += [0,0,0,1]
-                        self.nalu += list(data[i:i+naluLen])
+                        # print("nalu type-> ", data[i] & 0x1f)
+                        # keyType = data[i] & 0x1f
+                        # if keyType == 5:#idr帧
+                        #     self.nalu += list(naluSeq)
+                        self.nalu += list(naluHead) + list(data[i:i+naluLen])
                         i = i + naluLen
 
-
+                elif self.avcPacketType == 0 :
+                    # 提取pps sps
+                    spsLen = (data[i+6] << 8) + data[i + 7]
+                    i += 8
+                    sps = data[i:i+spsLen]
+                    i += spsLen
+                    ppsLen = (data[i+1] << 8) + data[i+2]
+                    i += 3
+                    pps = data[i:i+ppsLen]
+                    naluSeq = naluHead + sps + naluHead + pps
+                    # self.nalu += list(naluSeq)
+                    self.seq = naluSeq
         self.previousTagSize = int.from_bytes(data[self.dataSize:], byteorder='big')
 
     def getTagType(self):
@@ -94,8 +117,7 @@ h264DefaultHZ = 90
 import mpegts
 
 
-
-with open("testgen11.ts",'wb') as h:
+with open("testgen12.ts",'wb') as h:
     h.write(mpegts.SDT())
     h.write(mpegts.PAT())
     h.write(mpegts.PMT())
@@ -103,12 +125,15 @@ with open("testgen11.ts",'wb') as h:
         if tag.tagType == 9:
             if tag.nalu == []:
                 continue
-
-            #Pes层
+            # print(tag.nalu[:18])
+            # h.write(bytes(tag.nalu))
             dts = tag.timeStamp * h264DefaultHZ
             pts = dts + (tag.compositionTime * h264DefaultHZ)
-            peshead = mpegts.PES(pts,dts)
+            peshead = mpegts.PES(pts,dts,len(tag.nalu))
+            # print(list(peshead.data),pts,dts)
+            # exit()
             pes = peshead.data + bytes(tag.nalu)
-
-            h.write(mpegts.PACKET(pes,dts).getPack())
+            print(tag.frameType)
+            byteData = mpegts.PACKET(pes,dts,True).getPack()
+            h.write(byteData)
 
