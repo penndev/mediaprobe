@@ -114,37 +114,47 @@ class PES():
 class PACKET():
     VIDEO_COUNT=0
     AUDIT_COUNT=0
-    def __init__(self,r,dts,keyfram) :
-        pcrflag = keyfram
+
+    def __init__(self,r,dts,pcrflag) :
         self.pack = bytearray()
         while True:
             if(len(r) == 0):
                 break
             pack = bytearray([0xff]*188)
-            index = 4
+            # 头部赋值。
+            index = 4 
             pack[0:index] = self.tsHeader(pcrflag)
-            if pcrflag:# 只有首package才增加adaption
+            # adaptation 赋值只有首package才增加adaption
+            if pcrflag:
                 adapt = self.tsAdaptation(dts)
-                adaptL = len(adapt)
-                indexL = index+adaptL
-                pack[index:indexL] = adapt
-                index = indexL
+                pack[index:index+len(adapt)] = adapt
+                index += len(adapt)
                 pcrflag = False
-            # print(list(pack))
-            # exit()
+
             need = 188 - index
 
+            
+            # 有ts packet 填充字段。 
             if need > len(r):
-                pack[4] = 188 - index - len(r) - 1 # 填充长度 减去自身
-                index += pack[4] + 1 # 1 是自身长度。
+                pack[4] = need - len(r) - 1 # 填充长度 减去自身
+                index = 188 - len(r) # 1 是自身长度。
                 pack[index:188] = r
             else:
                 pack[index:188] = r[:need]
+            if dts == 5940:
+                print(r.hex(" "))
             r = r[need:]
             self.pack += pack
+
+            if dts == 5940:
+                print("debug",len(r),index,pack.hex(" "))
+                print(r)
+
+
             if(len(pack) != 188):
                 print("debug-here",len(pack),index,pack[4],len(r))
                 exit()
+    
     def getPack(self):
         return self.pack
     
@@ -167,6 +177,7 @@ class PACKET():
         h[7] = 0x00
         h[0] = 7
         return h
+    
     def tsHeader(self,adapta=False):
         'adapta 是否有拓展字段'
         h = bytearray(4)

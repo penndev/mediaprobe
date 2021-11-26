@@ -117,7 +117,7 @@ h264DefaultHZ = 90
 import mpegts
 
 
-with open("testgen12.ts",'wb') as h:
+with open("testgen11.ts",'wb') as h:
     h.write(mpegts.SDT())
     h.write(mpegts.PAT())
     h.write(mpegts.PMT())
@@ -125,15 +125,11 @@ with open("testgen12.ts",'wb') as h:
         if tag.tagType == 9:
             if tag.nalu == []:
                 continue
-            # print(tag.nalu[:18])
-            # h.write(bytes(tag.nalu))
             dts = tag.timeStamp * h264DefaultHZ
             pts = dts + (tag.compositionTime * h264DefaultHZ)
             peshead = mpegts.PES(pts,dts,len(tag.nalu))
-            # print(list(peshead.data),pts,dts)
-            # exit()
             pes = peshead.data + bytes(tag.nalu)
-            print(tag.frameType)
             byteData = mpegts.PACKET(pes,dts,True).getPack()
+            
             h.write(byteData)
 
