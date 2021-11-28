@@ -111,9 +111,11 @@ class PES():
         self.data[17] = gc >> 8
         self.data[18] = gc & 0xff
 
+
+VIDEO_COUNT=0
+AUDIT_COUNT=0
+
 class PACKET():
-    VIDEO_COUNT=0
-    AUDIT_COUNT=0
 
     def __init__(self,r,dts,pcrflag) :
         self.pack = bytearray()
@@ -133,24 +135,20 @@ class PACKET():
 
             need = 188 - index
 
-            
             # 有ts packet 填充字段。 
             if need > len(r):
-                pack[4] = need - len(r) - 1 # 填充长度 减去自身
-                index = 188 - len(r) # 1 是自身长度。
+                pack[4] = 183 - len(r)
+                index = 188 - len(r)
                 pack[index:188] = r
             else:
                 pack[index:188] = r[:need]
+
             if dts == 5940:
                 print(r.hex(" "))
+                print("debug",len(r),index,need,"<>",pack.hex(" "))
+
             r = r[need:]
             self.pack += pack
-
-            if dts == 5940:
-                print("debug",len(r),index,pack.hex(" "))
-                print(r)
-
-
             if(len(pack) != 188):
                 print("debug-here",len(pack),index,pack[4],len(r))
                 exit()
@@ -179,6 +177,7 @@ class PACKET():
         return h
     
     def tsHeader(self,adapta=False):
+        global VIDEO_COUNT
         'adapta 是否有拓展字段'
         h = bytearray(4)
         h[0] = 0x47
@@ -188,6 +187,6 @@ class PACKET():
         else:
             h[3] = 1 << 4
         h[1] |= 1
-        h[3] |= self.VIDEO_COUNT
-        self.VIDEO_COUNT = (self.VIDEO_COUNT + 1 ) % 16
+        h[3] |= VIDEO_COUNT
+        VIDEO_COUNT = (VIDEO_COUNT + 1 ) % 16
         return h

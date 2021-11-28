@@ -130,6 +130,5 @@ with open("testgen11.ts",'wb') as h:
             peshead = mpegts.PES(pts,dts,len(tag.nalu))
             pes = peshead.data + bytes(tag.nalu)
             byteData = mpegts.PACKET(pes,dts,True).getPack()
-            
             h.write(byteData)
 
