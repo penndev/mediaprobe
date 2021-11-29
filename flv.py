@@ -57,15 +57,10 @@ class FlvTag:
                         i = i + 4
                         if(len(data) <= i):
                             break
-                        # print("nalu type-> ", data[i] & 0x1f)
-                        # keyType = data[i] & 0x1f
-                        # if keyType == 5:#idr帧
-                        #     self.nalu += list(naluSeq)
                         self.nalu += list(naluHead) + list(data[i:i+naluLen])
                         i = i + naluLen
 
-                elif self.avcPacketType == 0 :
-                    # 提取pps sps
+                elif self.avcPacketType == 0 :# 提取pps sps
                     spsLen = (data[i+6] << 8) + data[i + 7]
                     i += 8
                     sps = data[i:i+spsLen]
@@ -74,8 +69,17 @@ class FlvTag:
                     i += 3
                     pps = data[i:i+ppsLen]
                     naluSeq = naluHead + sps + naluHead + pps
-                    # self.nalu += list(naluSeq)
-                    # self.seq = naluSeq
+        elif self.tagType == 8:
+            atype = (data[0] & 0xf0) >> 4
+            if atype == 10:
+                adtsHeader = [0xff, 0xf1, 0x4c, 0x80,0x00,0x00,0xfc]
+                adtsLen = len(data)+7
+                adtsLen = adtsLen << 5
+                adtsLen = adtsLen | 0x1f
+                adtsHeader[4:6] = adtsLen.to_bytes(2,'big')
+                self.adts = adtsHeader + list(data)
+            else:
+                self.adts = list(data[1:self.dataSize])
         self.previousTagSize = int.from_bytes(data[self.dataSize:], byteorder='big')
 
     def getTagType(self):
@@ -117,7 +121,8 @@ h264DefaultHZ = 90
 import mpegts
 
 
-with open("testgen12.ts",'wb') as h:
+
+with open("testgen001.ts",'wb') as h:
     h.write(mpegts.SDT())
     h.write(mpegts.PAT())
     h.write(mpegts.PMT())
@@ -131,4 +136,6 @@ with open("testgen12.ts",'wb') as h:
             pes = peshead.data + bytes(tag.nalu)
             byteData = mpegts.PACKET(pes,dts,True).getPack()
             h.write(byteData)
-
+        if tag.tagType == 8:
+            
+            h.write(bytes(tag.adts))
