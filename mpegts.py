@@ -119,7 +119,9 @@ class PACKET():
 
     def __init__(self,r,dts,pcrflag) :
         self.pack = bytearray()
+        countW = 0
         while True:
+            countW += 1
             if(len(r) == 0):
                 break
             pack = bytearray([0xff]*188)
@@ -136,8 +138,13 @@ class PACKET():
             need = 188 - index
 
             # 有ts packet 填充字段。 
-            if need > len(r):
+            if need > len(r): # 分段的尾部，或者开头的尾部。
+                if countW > 1:# 最后一段尾部
+                    # pack[1] |= 0x40
+                    pack[3] |= 0x30
                 pack[4] = 183 - len(r)
+                if pack[5] == 0xff:
+                    pack[5] = 0
                 index = 188 - len(r)
                 pack[index:188] = r
             else:

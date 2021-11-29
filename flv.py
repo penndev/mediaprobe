@@ -117,7 +117,7 @@ h264DefaultHZ = 90
 import mpegts
 
 
-with open("testgen11.ts",'wb') as h:
+with open("testgen12.ts",'wb') as h:
     h.write(mpegts.SDT())
     h.write(mpegts.PAT())
     h.write(mpegts.PMT())
