@@ -88,7 +88,7 @@ class PES():
         self.data[0:3] = [0x00, 0x00, 0x01]
         self.data[3] = 0xe0
         PesLen = 13 + dl
-        self.data[4:6] = [PesLen >> 8,PesLen & 0xff]
+        self.data[4:6] = [0,0]#[PesLen >> 8,PesLen & 0xff]
         self.data[6] = 0x80 # pes-info信息
         self.data[7] = 0xc0 # 默认存在dts和pts
         self.data[8] = 0x0a # len
@@ -142,10 +142,6 @@ class PACKET():
                 pack[index:188] = r
             else:
                 pack[index:188] = r[:need]
-
-            if dts == 5940:
-                print(r.hex(" "))
-                print("debug",len(r),index,need,"<>",pack.hex(" "))
 
             r = r[need:]
             self.pack += pack

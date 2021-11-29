@@ -75,7 +75,7 @@ class FlvTag:
                     pps = data[i:i+ppsLen]
                     naluSeq = naluHead + sps + naluHead + pps
                     # self.nalu += list(naluSeq)
-                    self.seq = naluSeq
+                    # self.seq = naluSeq
         self.previousTagSize = int.from_bytes(data[self.dataSize:], byteorder='big')
 
     def getTagType(self):
