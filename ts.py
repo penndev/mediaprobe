@@ -1,31 +1,27 @@
 
+'''  处理ts封包器  '''
 
 
 class PES:
     "可以对PES进行封包和拆包"
     
     START_CODE = [0x00, 0x00, 0x01]
-    VIDEO = 0xe0
-    AUDIO = 0xc0
+    TAG = {
+        "Video" : 0xe0,
+        "Audio" : 0xc0
+    }
 
-    def __init__(self) -> None:
-        self.hex = []
-        self.tagType = False
-
-    def setHead(self, tag, pts = False, dts = False):
+    def setES(self, tag, es = bytearray(), pts = False, dts = False):
         '根据参数生成 pes header 的 hex'
-        self.tagType = tag
+        self.tag = tag
         self.pts = pts
         self.dts = dts
         # 初始化
-        self.hex = self.START_CODE + [0] * 6
-        self.hex[3] = getattr(self,tag)
+        self.hex = bytearray( self.START_CODE + [self.TAG[tag]] + [0] * 5 )
         # if taglen != False:
         #     self.hex[4:6] = [PesLen >> 8,PesLen & 0xff]
-
         # pes-info信息
         self.hex[6] = 0x80 
-        
         # 设置pts | dts
         if pts != False:
             if dts != False:
@@ -39,11 +35,8 @@ class PES:
                 self.hexDtsPts(pts=pts)
         else:
             raise NameError('可以不存在dts，但是必须存在pts.')
+        self.hex += es
         return self
-
-    def setData(self,data):
-        self.hex += data
-        return self.hex
 
     def hexDtsPts(self, dts = False, pts = False):
         '生成pts and dts hex数据并返回'
@@ -53,7 +46,7 @@ class PES:
         else:
             dpvalue = pts
             dptype = 0x31
-        dphex = [0] * 5
+        dphex = bytearray([0] * 5)
         dphex[0] = dptype | (dpvalue >> 29)
         hp = ((dpvalue >> 15) & 0x7fff) * 2 + 1 
         dphex[1] = hp >> 8
@@ -64,7 +57,6 @@ class PES:
         # return dphex
         self.hex += dphex
 
-
 class PACKET:
     VIDEO_COUNT=0
     AUDIO_COUNT=0
@@ -73,13 +65,17 @@ class PACKET:
     AUDIO_PID = 0x101
 
     def setPes(self,pes):
+        'pes [class PES]'
+        tagType = pes.tag
+        data = pes.hex
+        dts = pes.dts
+
         self.hex = bytearray()
         first = True
-        data = pes.hex
         while len(data):
             pack = bytearray([0xff]*188)
             mixed = len(data) < 184
-            pack[0:4] = self.setHead(pes.tagType,adapta=first,mixed=mixed) 
+            pack[0:4] = self.setHead(tagType,adapta=first,mixed=mixed) 
             start = 4
             if mixed : # 最后一步,优先级最高
                 pack[4] = 183 - len(data)
@@ -87,7 +83,7 @@ class PACKET:
                     pack[5] = 0
                 start = pack[4] + 5
             elif first : # adapta 
-                pcr = self.setAdapta(pes.dts)
+                pcr = self.setAdapta(dts)
                 pack[4] = len(pcr)
                 start = 5 + pack[4]
                 pack[5:start] = pcr
@@ -100,6 +96,7 @@ class PACKET:
             self.hex += pack
             if first:
                 first = False
+        return self.hex
 
     def setAdapta(self,dts):
         adapt = bytearray([0]*7)
@@ -118,7 +115,7 @@ class PACKET:
         if adapta:
             tsHead[1] |= 0x40
         # 写入PID
-        if tag == 'VIDEO':
+        if tag == 'Video':
             tsHead[1] |= self.VIDEO_PID >> 8
             tsHead[2] |= self.VIDEO_PID & 0xff
             tsHead[3] |= self.VIDEO_COUNT
@@ -135,8 +132,47 @@ class PACKET:
             tsHead[3] |= 0x10
         return tsHead
 
+def SDT():
+    bt = bytearray([0xff]*188)
+    hex = [
+        0x47, 0x40, 0x11, 0x10, 
+        0x00, 0x42, 0xF0, 0x25, 0x00, 0x01, 0xC1, 0x00, 0x00, 0xFF, 
+        0x01, 0xFF, 0x00, 0x01, 0xFC, 0x80, 0x14, 0x48, 0x12, 0x01, 
+        0x06, 0x46, 0x46, 0x6D, 0x70, 0x65, 0x67, 0x09, 0x53, 0x65, 
+        0x72, 0x76, 0x69, 0x63, 0x65, 0x30, 0x31, 0x77, 0x7C, 0x43, 
+        0xCA
+    ]
+    bt[0:45] = hex
+    return bt
+
+def PAT():
+    bt = bytearray([0xff]*188)
+    hex = [
+        0x47, 0x40, 0x00, 0x10, #ts packet hd
+        0x00, #adaption
+        0x00, 0xB0, 0x0D, 0x00, 0x01, 0xC1, 0x00, 0x00, 0x00, 0x01, 
+        0xF0, 0x00, 0x2A, 0xB1, 0x04, 0xB2
+    ]
+    bt[0:21] = hex
+    return bt
+
+def PMT():
+    bt = bytearray([0xff]*188)
+    hex = [
+        0x47, 0x50, 0x00, 0x10,
+        0x00,
+        0x02, 0xB0, 0x17, 0x00, 0x01, 0xC1, 0x00, 0x00, 0xE1, 0x00,
+        0xF0, 0x00, 0x1B, 0xE1, 0x00, 0xF0, 0x00, 0x0F, 0xE1, 0x01,
+        0xF0, 0x00, 0x2F, 0x44, 0xB9, 0x9B
+    ]
+    bt[0:31] = hex
+    return bt
+
 Pes = PES()
 Packet = PACKET() 
 
 if __name__ == "__main__":
-    print(PES().setHead('VIDEO',396270,381240).setData([9,9,9,9]))
+    Pes.setHead('Video',396270,381240)
+    Pes.setData([0,1,2,3,4,5])
+    print(Pes.hex)
+    # -.-
