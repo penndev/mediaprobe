@@ -1,5 +1,18 @@
+'''  
+处理ts封包器  
+文档
+https://web.archive.org/web/20190217042838/
 
-'''  处理ts封包器  '''
+ISO/IEC 13818-4: "Information Technology - Generic coding of moving pictures and associated audio information:
+Compliance".
+
+ETSI TS 101 211: "Digital Video Broadcasting (DVB); Guidelines on implementation and usage of Service
+Information (SI)".
+
+ETSI TS 101 154: " Digital Video Broadcasting (DVB); Specification for the use of Video and Audio Coding in
+Broadcasting Applications based on the MPEG-2 Transport Stream".
+
+'''
 
 
 class PES:

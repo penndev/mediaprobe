@@ -1,28 +1,13 @@
 '''
 官方flv标准介绍  https://www.adobe.com/content/dam/acom/en/devnet/flv/video_file_format_spec_v10.pdf
-
-提取adts
-adtsHeader = [0xff, 0xf1, 0x4c, 0x80,0x00,0x00,0xfc]
-adtsLen = len(tag.tag.Data)+7
-adtsLen = adtsLen << 5
-adtsLen = adtsLen | 0x1f
-adtsHeader[4:6] = adtsLen.to_bytes(2,'big')
-h.write(bytes(adtsHeader))
-h.write(bytes(tag.tag.Data))
-
-提取nalu
-0,0,0,1 + nalu.data
-
 '''
 
-from os import close
-
-
 class TAG:
-    
+    ' flv tag 详细分析 '
     NALU_HEAD = bytearray([0,0,0,1])
 
     def getHead(self,data):
+        '根据11字节的tag header 进行探测tag body 长度'
         self.tagType = data[0]
         self.dataSize = int.from_bytes(data[1:4], byteorder='big')
         self.timeStamp = int.from_bytes(data[4:7], byteorder='big')
@@ -30,6 +15,7 @@ class TAG:
         self.streamID = int.from_bytes(data[8:11], byteorder='big')
     
     def setData(self,data):
+        '分析并提取 tag body 内容'
         if(self.tagType == 9): # flv video tag data
             self.frameType = data[0] >> 4
             self.codecID = data[0] & 0x0f
@@ -79,11 +65,13 @@ class TAG:
         else:
             raise NameError("未知的tag type:" + str(self.tagType))
 
-class FLV:
 
+class FLV:
+    '''flv 封包器 与 解包器  {目前只完成解包，封包效果类似。}'''
     TAG_HEAD_LEN = 11
 
     def setFile(self,filename):
+        '根据flv文件进行tag分析与提取'
         self.tags = []
         with open(filename, 'rb') as f:
             self.hex = bytearray(f.read())
@@ -99,10 +87,10 @@ class FLV:
             readCount += tag.dataSize + 4
             self.tags.append(tag)
 
-H264DefaultHZ = 90
 
 if __name__ == "__main__":
     import ts
+    H264DefaultHZ = 90
     flv = FLV()
     flv.setFile("testcopy.flv")
     
