@@ -63,6 +63,46 @@ class Pes:
 
 # 单信道
 # 不做多路复用
+# class AnalyzePes:
+#     def __init__(self,filename) -> None:
+#         self.PesVideo = []
+#         self.PesAudio = []
+
+#         TmpPesVideo = []
+#         TmpPesAudio = []
+        
+#         self.PesVideoCount = 1
+#         self.PesAudioCount = 1
+
+#         ts = Ts(filename)
+#         for pkg in ts.body:
+#             if pkg.header.pid == VideoPid:
+#                 if pkg.header.payloadStart == 1:
+#                     if self.PesVideoCount != 1:
+#                         self.PesVideo.append(Pes(TmpPesVideo))
+#                     self.PesVideoCount += 1
+#                     TmpPesVideo = []
+#                 TmpPesVideo += pkg.body
+#             if pkg.header.pid == AudioPid:
+#                 if pkg.header.payloadStart == 1:
+#                     if self.PesAudioCount != 1:
+#                         self.PesAudio.append(Pes(TmpPesAudio))
+#                     self.PesAudioCount += 1
+#                     TmpPesAudio = []
+#                 TmpPesAudio += pkg.body
+#         self.PesVideo.append(Pes(TmpPesVideo))
+#         self.PesVideo.append(Pes(TmpPesAudio))
+
+# pes = AnalyzePes("test.ts")
+# with open('test_mpegts.h264','wb') as ts:
+#     for pkg in pes.PesVideo:
+#         ts.write(bytes(pkg.body))
+
+# with open('test_mpegts.aac','wb') as ts:
+#     for pkg in pes.PesAudio:
+#         ts.write(bytes(pkg.body))
+
+
 class AnalyzePes:
     def __init__(self,filename) -> None:
         self.PesVideo = []
@@ -92,12 +132,3 @@ class AnalyzePes:
                 TmpPesAudio += pkg.body
         self.PesVideo.append(Pes(TmpPesVideo))
         self.PesVideo.append(Pes(TmpPesAudio))
-
-pes = AnalyzePes("test.ts")
-with open('test_mpegts.h264','wb') as ts:
-    for pkg in pes.PesVideo:
-        ts.write(bytes(pkg.body))
-
-with open('test_mpegts.aac','wb') as ts:
-    for pkg in pes.PesAudio:
-        ts.write(bytes(pkg.body))
