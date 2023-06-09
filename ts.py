@@ -1,4 +1,9 @@
 '''
+>  mpeg2-ts 初次接触是因为hls默认生成的视频封装格式。
+给我的感觉是封装复杂而且其他的0xff的填充也造成冗余，
+不太适应现在较为稳定的网络传输环境（本来就是为了无线通讯）。
+但是还是值得学习的。
+
 参考文档：
     - `https://tsduck.io/download/docs/mpegts-introduction.pdf`
     - `https://www.itu.int/rec/T-REC-H.222.0`
@@ -6,12 +11,43 @@
     - `https://dvd.sourceforge.net/dvdinfo/pes-hdr.html`
 '''
 
+
+class Pes:
+    def __init__(self) -> None:
+        self.head = None
+
+
+
+    def test(self,filepath:str):
+        pes_video = bytearray()
+        with open(filepath,"rb") as i_file:
+            while True:
+                # 文件字节流转换为 Ts Pakcet
+                i_pk = i_file.read(188)
+                if not i_pk:
+                    break
+                tspack = TsPacket().set(i_pk)
+                
+                # Ts Packet 提取 PES
+                if tspack.pid == 0x100: # 视频
+                    # 如果pes_video空则表示是第一个pes
+                    if tspack.payload_unit_start_indicator == 1 and len(pes_video) > 0: 
+                        # 如何操作PES数据呢。
+                        print(pes_video)
+
+                        pes_video = tspack.body # 必须置空
+                    else:
+                        pes += tspack.body
+                # 提取出pes数据
+
+
+    def __del__(self):
+        self.file.close()
+
 def get_pcr(data: bytes):
     '''
     根据文档提取 pcr 的数据
     '''
-    # pcr_base = ((data[0] & 0x000000FF) << 25) | ((data[1] & 0x000000FF) << 17) | ((data[2] & 0x000000FE) << 9) | ((data[3] & 0x000000FF) << 1) | ((data[4] & 0x00000080) >> 7)
-    # pcr_extension = ((data[4] & 0x00000001) << 8) | (data[5] & 0x000000FF)
     pcr_base = 0 | (data[0] & 0xFF) << 25
     pcr_base |= (data[1] & 0xFF) << 17
     pcr_base |= (data[2] & 0xFF) << 9
@@ -33,15 +69,13 @@ def set_pcr(pcr_base: int, pcr_extension: int) -> bytes:
     data[5] = pcr_extension & 0xFF
     return bytes(data)
 
-
 class TsPacket:
     def __init__(self) -> None:
         '''
             Transport Packet 数据包进行拆包组包的实际实现
         '''
-        
-        self.sync = 0x47 # 固定标识头 71 0x47 assic 'G'
-
+        ##### ts packet header
+        self.sync = 0x47 # 固定标识头 0x47 71
         self.transport_error_indicator = None
         self.payload_unit_start_indicator = None
         self.transport_priority = None
@@ -49,9 +83,7 @@ class TsPacket:
         self.transport_scrambling_control = None
         self.adaptation_field_control = None
         self.continuity_counter = None
-
-        # 适配字段
-        # self.adapt = None # - 虚拟字段不参与拼装 | 后删除
+        # ts packet adaptation 
         self.adaptation_field_length = None  
         self.discontinuity_indicator = None 
         self.random_access_indicator = None 
@@ -61,10 +93,9 @@ class TsPacket:
         self.splicing_point_flag = None 
         self.transport_private_data_flag = None 
         self.adaptation_field_extension_flag = None 
-        # if self.PCR_flag == 1
-        self.pcr_base = None
-        self.pcr_extension = None
-
+        self.pcr_base = None      # - if self.PCR_flag == 1
+        self.pcr_extension = None # -  (pcr_base * 300 + pcr_extension) / 27hz = pcr
+        # pes data
         self.body = None
 
     def set(self,data:bytes):
@@ -101,7 +132,6 @@ class TsPacket:
         else:
             raise Exception("错误的 adaptation_field_control")
         return self
-
 
     def get(self):
         '''
@@ -144,13 +174,16 @@ class TsPacket:
             raise Exception("错误的 数据长度")
         return data
 
+    def test(self,file:str):
+        '''进行ts拆包封装测试'''
+        with open(file,'rb') as i_file:
+            with open("new_" + file,"wb") as o_file: 
+                while True:
+                    i_pk = i_file.read(188)
+                    if not i_pk:
+                        break
+                    o_file.write(TsPacket().set(i_pk).r_ts.get())
+
 if __name__ == "__main__":
-    with open("file/in.ts",'rb') as i_file:
-        with open("nts1.ts","wb") as o_file: 
-            while True:
-                i_pk = i_file.read(188)
-                if not i_pk:
-                    break
-                r_ts = TsPacket().set(i_pk)
-                if r_ts.PCR_flag : print((r_ts.pcr_base * 300 + r_ts.pcr_extension)/27000000)
-                o_file.write(r_ts.get())
+    
+    print(Pes().test("file/in.ts"))
