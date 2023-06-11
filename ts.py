@@ -1,8 +1,7 @@
 '''
->  mpeg2-ts 初次接触是因为hls默认生成的视频封装格式。
-给我的感觉是封装复杂而且其他的0xff的填充也造成冗余，
-不太适应现在较为稳定的网络传输环境（本来就是为了无线通讯）。
-但是还是值得学习的。
+>   Mpeg2-TS 初次接触是因为hls默认生成的视频封装的格式
+给我的感觉是封装复杂 ts层 pes层 es层 而且其188*0xff的固定填充造成冗余
+格式较老 用于web封装显得冗杂 但是还是值得学习的视频概念
 
 参考文档：
     - `https://tsduck.io/download/docs/mpegts-introduction.pdf`
@@ -11,148 +10,236 @@
     - `https://dvd.sourceforge.net/dvdinfo/pes-hdr.html`
 '''
 
+def SDT():
+    bt = bytearray([0xff]*188)
+    hex = [
+        0x47, 0x40, 0x11, 0x10, 
+        0x00, 0x42, 0xF0, 0x25, 0x00, 0x01, 0xC1, 0x00, 0x00, 0xFF, 
+        0x01, 0xFF, 0x00, 0x01, 0xFC, 0x80, 0x14, 0x48, 0x12, 0x01, 
+        0x06, 0x46, 0x46, 0x6D, 0x70, 0x65, 0x67, 0x09, 0x53, 0x65, 
+        0x72, 0x76, 0x69, 0x63, 0x65, 0x30, 0x31, 0x77, 0x7C, 0x43, 
+        0xCA
+    ]
+    bt[0:45] = hex
+    return bt
 
-class Pes:
-    def __init__(self) -> None:
-        self.head = None
+def PAT():
+    bt = bytearray([0xff]*188)
+    hex = [
+        0x47, 0x40, 0x00, 0x10, #ts packet hd
+        0x00, #adaption
+        0x00, 0xB0, 0x0D, 0x00, 0x01, 0xC1, 0x00, 0x00, 0x00, 0x01, 
+        0xF0, 0x00, 0x2A, 0xB1, 0x04, 0xB2
+    ]
+    bt[0:21] = hex
+    return bt
+
+def PMT():
+    bt = bytearray([0xff]*188)
+    hex = [
+        0x47, 0x50, 0x00, 0x10,
+        0x00,
+        0x02, 0xB0, 0x17, 0x00, 0x01, 0xC1, 0x00, 0x00, 0xE1, 0x00,
+        0xF0, 0x00, 0x1B, 0xE1, 0x00, 0xF0, 0x00, 0x0F, 0xE1, 0x01,
+        0xF0, 0x00, 0x2F, 0x44, 0xB9, 0x9B
+    ]
+    bt[0:31] = hex
+    return bt
 
 
+class PesPacket:
+    @staticmethod
+    def get_pts_dts(pts: bytearray) -> int:
+        value = ((pts[0] & 0x0E) << 29) | \
+            ((pts[1] & 0xFF) << 22) | \
+            ((pts[2] & 0xFE) << 14) | \
+            ((pts[3] & 0xFF) << 7) | \
+            ((pts[4] & 0xFE) >> 1)
+        return value
 
-    def test(self,filepath:str):
-        pes_video = bytearray()
-        with open(filepath,"rb") as i_file:
-            while True:
-                # 文件字节流转换为 Ts Pakcet
-                i_pk = i_file.read(188)
-                if not i_pk:
-                    break
-                tspack = TsPacket().set(i_pk)
-                
-                # Ts Packet 提取 PES
-                if tspack.pid == 0x100: # 视频
-                    # 如果pes_video空则表示是第一个pes
-                    if tspack.payload_unit_start_indicator == 1 and len(pes_video) > 0: 
-                        # 如何操作PES数据呢。
-                        print(pes_video)
+    @staticmethod
+    def set_pts_dts(value: int, mask: int) -> bytearray:
+        pts = bytearray(5)
+        pts[0] = (value >> 29) & 0x0E | 1 | mask
+        pts[1] = (value >> 22) & 0xFF
+        pts[2] = (value >> 14) & 0xFE | 1
+        pts[3] = (value >> 7) & 0xFF
+        pts[4] = (value << 1) & 0xFE | 1
+        return pts
 
-                        pes_video = tspack.body # 必须置空
-                    else:
-                        pes += tspack.body
-                # 提取出pes数据
+    def __init__(self, pes: bytearray) -> None:
+        self.stream_id = None
+        self.PES_packet_length = None
+        self.PES_scrambling_control = None
+        self.PES_priority = None
+        self.data_alignment_indicator = None
+        self.copyright = None
+        self.original_or_copy = None
+        self.PTS_DTS_flags = None
+        self.ESCR_flag = None
+        self.ES_rate_flag = None
+        self.DSM_trick_mode_flag = None
+        self.additional_copy_info_flag = None
+        self.PES_CRC_flag = None
+        self.PES_extension_flag = None
+        self.PES_header_data_length = None
+        self.PTS = None
+        self.DTS = None
 
+        self.payload = None
 
-    def __del__(self):
-        self.file.close()
+        ##
+        if pes[0:3] != bytearray([0, 0, 1]):
+            raise Exception("错误的pes开头")
+        self.stream_id = pes[3]
+        self.PES_packet_length = (pes[4] << 8) | pes[5]
+        self.PES_scrambling_control = (pes[6] & 30) >> 4
+        self.PES_priority = (pes[6] & 4) >> 3
+        self.data_alignment_indicator = (pes[6] & 3) >> 2
+        self.copyright = (pes[6] & 2) >> 1
+        self.original_or_copy = pes[6] & 1
+        self.PTS_DTS_flags = (pes[7] & 0xc0) >> 6
+        self.ESCR_flag = (pes[7] >> 5) & 1
+        self.ES_rate_flag = (pes[7] >> 4) & 1
+        self.DSM_trick_mode_flag = (pes[7] >> 3) & 1
+        self.additional_copy_info_flag = (pes[7] >> 2) & 1
+        self.PES_CRC_flag = (pes[7] >> 1) & 1
+        self.PES_extension_flag = pes[7] & 1
+        self.PES_header_data_length = pes[8]
+        if self.PTS_DTS_flags == 1:
+            raise Exception("提取错误的值 PTS_DTS_flags")
+        elif self.PTS_DTS_flags == 2:  # 0b10
+            self.PTS = PesPacket.get_pts_dts(pes[9:14])
+        elif self.PTS_DTS_flags == 3:  # 0b11
+            self.PTS = PesPacket.get_pts_dts(pes[9:14])
+            self.DTS = PesPacket.get_pts_dts(pes[14:19])
+        self.payload = pes[8+self.PES_header_data_length:]
 
-def get_pcr(data: bytes):
-    '''
-    根据文档提取 pcr 的数据
-    '''
-    pcr_base = 0 | (data[0] & 0xFF) << 25
-    pcr_base |= (data[1] & 0xFF) << 17
-    pcr_base |= (data[2] & 0xFF) << 9
-    pcr_base |= (data[3] & 0xFF) << 1
-    pcr_base |= (data[4] & 0x80) >> 7
-    pcr_extension = ((data[4] & 0x01) << 8) | (data[5] & 0xFF)
-    return pcr_base, pcr_extension
+    def tobyte(self):
+        pes = bytearray(9)
+        pes[0:3] = [0, 0, 1]
+        pes[3] = self.stream_id
+        pes[4] = self.PES_packet_length >> 8
+        pes[5] = self.PES_packet_length & 0xFF
+        pes[6] = 0x80
+        pes[6] |= self.PES_scrambling_control << 4
+        pes[6] |= self.PES_priority << 3
+        pes[6] |= self.data_alignment_indicator << 2
+        pes[6] |= self.copyright << 1
+        pes[6] |= self.original_or_copy
+        pes[7] = self.PTS_DTS_flags << 6
+        pes[7] |= self.ESCR_flag << 5
+        pes[7] |= self.ES_rate_flag << 4
+        pes[7] |= self.DSM_trick_mode_flag << 3
+        pes[7] |= self.additional_copy_info_flag << 2
+        pes[7] |= self.PES_CRC_flag << 1
+        pes[7] |= self.PES_extension_flag
+        pes[8] = self.PES_header_data_length
+        if self.PTS_DTS_flags == 2:
+            pes += PesPacket.set_pts_dts(self.PTS, 0x20)
+        elif self.PTS_DTS_flags == 3:
+            pes += PesPacket.set_pts_dts(self.PTS, 0x30)
+            pes += PesPacket.set_pts_dts(self.DTS, 0x10)
+        pes[8+self.PES_header_data_length:] = self.payload
+        return pes
 
-def set_pcr(pcr_base: int, pcr_extension: int) -> bytes:
-    '''
-    根据文档将 pcr 数据生成 bytes
-    '''
-    data = bytearray(6)
-    data[0] = (pcr_base >> 25) & 0xFF
-    data[1] = (pcr_base >> 17) & 0xFF
-    data[2] = (pcr_base >> 9) & 0xFF
-    data[3] = (pcr_base >> 1) & 0xFF
-    data[4] = (pcr_base << 7 & 0xFF | 0x7e) | ((pcr_extension >> 8) & 0x01) 
-    data[5] = pcr_extension & 0xFF
-    return bytes(data)
 
 class TsPacket:
-    def __init__(self) -> None:
+    def __init__(self, data: bytearray | None = None):
         '''
-            Transport Packet 数据包进行拆包组包的实际实现
+            每个ts packet大小为188字节
+            将188字节进行拆分编码
         '''
-        ##### ts packet header
-        self.sync = 0x47 # 固定标识头 0x47 71
-        self.transport_error_indicator = None
-        self.payload_unit_start_indicator = None
-        self.transport_priority = None
-        self.pid = None
-        self.transport_scrambling_control = None
-        self.adaptation_field_control = None
-        self.continuity_counter = None
-        # ts packet adaptation 
-        self.adaptation_field_length = None  
-        self.discontinuity_indicator = None 
-        self.random_access_indicator = None 
-        self.elementary_stream_priority_indicator = None 
-        self.PCR_flag = None 
-        self.OPCR_flag = None 
-        self.splicing_point_flag = None 
-        self.transport_private_data_flag = None 
-        self.adaptation_field_extension_flag = None 
-        self.pcr_base = None      # - if self.PCR_flag == 1
-        self.pcr_extension = None # -  (pcr_base * 300 + pcr_extension) / 27hz = pcr
-        # pes data
-        self.body = None
-
-    def set(self,data:bytes):
-        '''
-            将 188个字节进行类实例的填充
-        '''
-        if len(data) != 188 :
+        # ts packet header
+        self.sync = 0x47  # 固定标识头 0x47 71
+        self.transport_error_indicator = 0
+        self.payload_unit_start_indicator = 0
+        self.transport_priority = 0
+        self.pid = 0
+        self.transport_scrambling_control = 0
+        self.adaptation_field_control = 0
+        self.continuity_counter = 0
+        # ts packet adaptation
+        self.adaptation_field_length = 0
+        self.discontinuity_indicator = 0
+        self.random_access_indicator = 0
+        self.elementary_stream_priority_indicator = 0
+        self.PCR_flag = 0
+        self.OPCR_flag = 0
+        self.splicing_point_flag = 0
+        self.transport_private_data_flag = 0
+        self.adaptation_field_extension_flag = 0
+        self.pcr_base = 0      # - if self.PCR_flag == 1
+        self.pcr_extension = 0 # - (pcr_base * 300 + pcr_extension) / 27hz = pcr
+        # ts packet payload
+        self.payload = None  # - pes data
+        # -------------------------------------------------------------------------------
+        # -------------------------------------------------------------------------------
+        # -------------------------------------------------------------------------------
+        if data is None:
+            return
+        if len(data) != 188:
             raise Exception("数据长度不足188")
         if data[0] != 0x47:
             raise Exception("同步字节错误，应为0x47")
+        #
         self.sync = data[0]
         self.transport_error_indicator = data[1] >> 7
-        self.payload_unit_start_indicator = data[1] >> 6 & 1 
+        self.payload_unit_start_indicator = data[1] >> 6 & 1
         self.transport_priority = data[1] >> 5 & 1
-        self.pid = int.from_bytes([data[1] & 0x1f,data[2]],"big")
+        self.pid = int.from_bytes([data[1] & 0x1f, data[2]], "big")
         self.transport_scrambling_control = data[3] >> 6
         self.adaptation_field_control = data[3] >> 4 & 3
         self.continuity_counter = data[3] & 0x0f
-        if self.adaptation_field_control == 3 or self.adaptation_field_control == 2: 
+        if self.adaptation_field_control == 3 or self.adaptation_field_control == 2:
             self.adaptation_field_length = data[4]
             self.discontinuity_indicator = data[5] >> 7
             self.random_access_indicator = (data[5] >> 6) & 1
-            self.elementary_stream_priority_indicator = (data[5] >> 5) & 1 
-            self.PCR_flag = (data[5] >> 4) & 1 
-            self.OPCR_flag = (data[5] >> 3) & 1 
-            self.splicing_point_flag = (data[5] >> 2) & 1 
-            self.transport_private_data_flag =  (data[5] >> 1) & 1 
-            self.adaptation_field_extension_flag = data[5] & 1 
-            if self.PCR_flag == 1 :
-                self.pcr_base, self.pcr_extension = get_pcr(data[6:12])
-            self.body = data[5+self.adaptation_field_length:]
+            self.elementary_stream_priority_indicator = (data[5] >> 5) & 1
+            self.PCR_flag = (data[5] >> 4) & 1
+            self.OPCR_flag = (data[5] >> 3) & 1
+            self.splicing_point_flag = (data[5] >> 2) & 1
+            self.transport_private_data_flag = (data[5] >> 1) & 1
+            self.adaptation_field_extension_flag = data[5] & 1
+            if self.PCR_flag == 1:
+                pcr_data = data[6:12]
+                self.pcr_base = 0 | (pcr_data[0] & 0xFF) << 25
+                self.pcr_base |= (pcr_data[1] & 0xFF) << 17
+                self.pcr_base |= (pcr_data[2] & 0xFF) << 9
+                self.pcr_base |= (pcr_data[3] & 0xFF) << 1
+                self.pcr_base |= (pcr_data[4] & 0x80) >> 7
+                self.pcr_extension = ((pcr_data[4] & 0x01) << 8) | (pcr_data[5] & 0xFF)
+
+            self.payload = data[5+self.adaptation_field_length:]
         elif self.adaptation_field_control == 1:
-            self.body = data[4:]
+            self.payload = data[4:]
         else:
             raise Exception("错误的 adaptation_field_control")
-        return self
 
-    def get(self):
+    def tobyte(self):
         '''
             封装数据到ts 字节数据
         '''
         data = bytearray([0XFF] * 188)
         data[0] = self.sync
         data[1] = 0
-        if self.transport_error_indicator : data[1] |= 0b10000000
-        if self.payload_unit_start_indicator : data[1] |= 0b1000000
-        if self.transport_priority : data[1] |= 0b100000
-        data[1] |= (self.pid >> 8) & 0b11111
+        if self.transport_error_indicator:
+            data[1] |= 0x80
+        if self.payload_unit_start_indicator:
+            data[1] |= 0x40
+        if self.transport_priority:
+            data[1] |= 0x20
+        data[1] |= (self.pid >> 8) & 0x1f
         data[2] = self.pid & 0xff
         data[3] = 0
         data[3] |= (self.transport_scrambling_control & 0xff) << 6
-        data[3] |= (self.adaptation_field_control & 0b111111) << 4
-        data[3] |= self.continuity_counter & 0b1111
+        data[3] |= (self.adaptation_field_control & 0x3f) << 4
+        data[3] |= self.continuity_counter & 0x0f
         # 完成head
         if self.adaptation_field_control == 3 or self.adaptation_field_control == 2:
             data[4] = self.adaptation_field_length
-            data[5] = 0 | self.discontinuity_indicator << 7
+            data[5] = 0
+            data[5] |= self.discontinuity_indicator << 7
             data[5] |= self.random_access_indicator << 6
             data[5] |= self.elementary_stream_priority_indicator << 5
             data[5] |= self.PCR_flag << 4
@@ -160,30 +247,214 @@ class TsPacket:
             data[5] |= self.splicing_point_flag << 2
             data[5] |= self.transport_private_data_flag << 1
             data[5] |= self.adaptation_field_extension_flag
-            if self.PCR_flag == 1 :
-                data[6:12]  = set_pcr(self.pcr_base, self.pcr_extension)
-            data[5+self.adaptation_field_length:] = self.body
+
+            if self.PCR_flag == 1:
+                pcr_data = bytearray(6)
+                pcr_data[0] = (self.pcr_base >> 25) & 0xFF
+                pcr_data[1] = (self.pcr_base >> 17) & 0xFF
+                pcr_data[2] = (self.pcr_base >> 9) & 0xFF
+                pcr_data[3] = (self.pcr_base >> 1) & 0xFF
+                pcr_data[4] = self.pcr_base << 7 & 0xFF | 0x7e 
+                pcr_data[4] |= (self.pcr_extension >> 8) & 0x01
+                pcr_data[5] = self.pcr_extension & 0xFF
+                data[6:12] = pcr_data
+            data[5+self.adaptation_field_length:] = self.payload
         elif self.adaptation_field_control == 1:
-            # if self.payload_unit_start_indicator == 1:
-            #     raise Exception("特殊情况")
-            # else:
-                data[4:] = self.body
+            data[4:] = self.payload
         else:
             raise Exception("错误的 adaptation_field_control")
         if len(data) != 188:
             raise Exception("错误的 数据长度")
         return data
 
-    def test(self,file:str):
-        '''进行ts拆包封装测试'''
-        with open(file,'rb') as i_file:
-            with open("new_" + file,"wb") as o_file: 
-                while True:
-                    i_pk = i_file.read(188)
-                    if not i_pk:
-                        break
-                    o_file.write(TsPacket().set(i_pk).r_ts.get())
+class Ts:
+    VIDEO_COUNT=0
+    AUDIO_COUNT=0
+
+    VIDEO_PID = 0x100
+    AUDIO_PID = 0x101
+
+    FILE_IN = None
+    FILE_OUT = None
+
+    # adaptation_field_control = 11 | 176 byte
+    def set_adaptation_11(self, pcr_base, pcr_ext, pid, pes):
+        pk = TsPacket()
+        pk.payload_unit_start_indicator = 1
+        pk.pid = pid
+        pk.transport_scrambling_control = 0
+        pk.adaptation_field_control = 3
+        if pid == self.VIDEO_PID:
+            pk.continuity_counter = self.VIDEO_COUNT % 16
+            self.VIDEO_COUNT += 1
+        elif pid == self.AUDIO_PID:
+            pk.continuity_counter = self.AUDIO_COUNT % 16
+            self.AUDIO_COUNT += 1
+        else:
+            raise Exception("错误的pid", pid)
+        # 
+        pk.adaptation_field_length = 183 - len(pes)
+        pk.random_access_indicator = 1
+        pk.PCR_flag = 1
+        pk.pcr_base = pcr_base
+        pk.pcr_extension = pcr_ext
+        # head 4 + adaption(1) +  number(adaption) = 12
+        pk.payload = pes  # - pes data
+        self.FILE_OUT.write(pk.tobyte())
+
+    # adaptation_field_control = 01 | 184 byte
+    def set_adaptation_01(self, pid, pes):
+        pk = TsPacket()
+        pk.pid = pid
+        pk.adaptation_field_control = 1
+        if pid == self.VIDEO_PID:
+            pk.continuity_counter = self.VIDEO_COUNT % 16
+            self.VIDEO_COUNT += 1
+        elif pid == self.AUDIO_PID:
+            pk.continuity_counter = self.AUDIO_COUNT % 16
+            self.AUDIO_COUNT += 1
+        else:
+            raise Exception("错误的pid", pid)
+        pk.payload = pes
+        self.FILE_OUT.write(pk.tobyte())
+
+    # end
+
+    # adaption_field_control = 11 | <184 byte
+    def set_adaptation_fill_11(self,pid,pes):
+        pk = TsPacket()
+        pk.payload_unit_start_indicator = 1
+        pk.pid = pid
+        pk.transport_scrambling_control = 0
+        pk.adaptation_field_control = 3
+        if pid == self.VIDEO_PID:
+            pk.continuity_counter = self.VIDEO_COUNT % 16
+            self.VIDEO_COUNT += 1
+        elif pid == self.AUDIO_PID:
+            pk.continuity_counter = self.AUDIO_COUNT % 16
+            self.AUDIO_COUNT += 1
+        else:
+            raise Exception("错误的pid", pid)
+
+        pk.adaptation_field_length = 183 - len(pes)
+        pk.payload = pes  # - pes data
+
+        self.FILE_OUT.write(pk.tobyte()) 
+
+
+
+    def set_pes(self,pcr_base, pcr_ext, pid, pes):
+        # 填充pes
+        self.set_adaptation_11(pcr_base, pcr_ext, pid, pes[:176])
+        pes = pes[176:]
+        while len(pes) >= 184:
+            self.set_adaptation_01(pid, pes[:184])
+            pes = pes[184:]
+        self.set_adaptation_fill_11(pid, pes)
+        
+
+
+    def __init__(self, in_file:str, out_file:str) -> None:
+
+        self.FILE_IN = open(in_file, "rb") 
+        self.FILE_OUT = open(out_file, "wb")
+
+        pes_video = bytearray()
+        pes_audio = bytearray()
+
+        pcr_base = 0
+        pcr_ext = 0
+
+        self.FILE_OUT.write(SDT())
+        self.FILE_OUT.write(PAT())
+        self.FILE_OUT.write(PMT())
+
+        while True:
+            # 文件字节流转换为 Ts Pakcet
+            i_pk = self.FILE_IN.read(188)
+            if not i_pk:
+                break
+            ts_pack = TsPacket(i_pk)
+
+            if ts_pack.pid == 0x100:  # 视频
+                if ts_pack.payload_unit_start_indicator == 1 and len(pes_video) > 0:
+
+                    pes_pack = PesPacket(pes_video)
+                    self.set_pes(pcr_base, pcr_ext, ts_pack.pid, pes_pack.tobyte())
+
+                    pes_video = ts_pack.payload  # 必须置空
+                else:
+                    pes_video += ts_pack.payload
+            elif ts_pack.pid == 0x101:  # 音频
+                if ts_pack.payload_unit_start_indicator == 1 and len(pes_audio) > 0:
+
+                    pes_pack = PesPacket(pes_audio)
+                    # self.set_pes(pcr_base, pcr_ext, ts_pack.pid, pes_pack.tobyte())
+
+                    pes_audio = ts_pack.payload  # 必须置空
+                else:
+                    pes_audio += ts_pack.payload
+            if ts_pack.payload_unit_start_indicator == 1 and ts_pack.adaptation_field_control == 3:
+                pcr_base = ts_pack.pcr_base
+                pcr_ext = ts_pack.pcr_extension
+                # print(pcr_base, pcr_ext)
+
 
 if __name__ == "__main__":
-    
-    print(Pes().test("file/in.ts"))
+    Ts("file/in.ts", "out.ts")
+
+
+
+
+def test_ts(filepath: str):
+    with open(filepath, "rb") as i_file:
+        with open(filepath + ".b", "wb") as w_file:
+            while True:
+                # 文件字节流转换为 Ts Pakcet
+                i_pk = i_file.read(188)
+                if not i_pk:
+                    break
+                ts_pack = TsPacket(i_pk)
+                if ts_pack.adaptation_field_control == 3 and ts_pack.pid == 256: 
+                    print(ts_pack.pid, ts_pack.payload_unit_start_indicator)
+                w_file.write(ts_pack.tobyte())
+
+def test_pes(filepath: str):
+
+    fi = open("in.pes", "wb")
+    fo = open("out.pes", "wb")
+
+    pes_video = bytearray()
+    pes_audio = bytearray()
+    with open(filepath, "rb") as i_file:
+        while True:
+            # 文件字节流转换为 Ts Pakcet
+            i_pk = i_file.read(188)
+            if not i_pk:
+                break
+            ts_pack = TsPacket(i_pk)
+
+            # Ts Packet 提取 PES
+            if ts_pack.pid == 0x100:  # 视频
+                if ts_pack.payload_unit_start_indicator == 1 and len(pes_video) > 0:
+
+                    fi.write(pes_video)
+                    pes_pack = PesPacket(pes_video)
+                    fo.write(pes_pack.tobyte())
+
+
+                    pes_video = ts_pack.payload  # 必须置空
+                else:
+                    pes_video += ts_pack.payload
+            elif ts_pack.pid == 0x101:  # 音频
+                if ts_pack.payload_unit_start_indicator == 1 and len(pes_audio) > 0:
+
+                    fi.write(pes_audio)
+                    pes_pack = PesPacket(pes_audio)
+                    fo.write(pes_pack.tobyte())
+
+
+                    pes_audio = ts_pack.payload  # 必须置空
+                else:
+                    pes_audio += ts_pack.payload
+
