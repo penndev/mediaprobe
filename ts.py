@@ -294,11 +294,29 @@ class Ts:
             raise Exception("错误的pid", pid)
         # 
         pk.adaptation_field_length = 183 - len(pes)
-        pk.random_access_indicator = 1
+        # pk.random_access_indicator = 1
         pk.PCR_flag = 1
         pk.pcr_base = pcr_base
         pk.pcr_extension = pcr_ext
         # head 4 + adaption(1) +  number(adaption) = 12
+        pk.payload = pes  # - pes data
+        self.FILE_OUT.write(pk.tobyte())
+
+    # adaption_field_control = 11 | <184 byte
+    def set_adaptation_fill_11(self,pid,pes):
+        pk = TsPacket()
+        pk.pid = pid
+        pk.transport_scrambling_control = 0
+        pk.adaptation_field_control = 3
+        if pid == self.VIDEO_PID:
+            pk.continuity_counter = self.VIDEO_COUNT % 16
+            self.VIDEO_COUNT += 1
+        elif pid == self.AUDIO_PID:
+            pk.continuity_counter = self.AUDIO_COUNT % 16
+            self.AUDIO_COUNT += 1
+        else:
+            raise Exception("错误的pid", pid)
+        pk.adaptation_field_length = 183 - len(pes)
         pk.payload = pes  # - pes data
         self.FILE_OUT.write(pk.tobyte())
 
@@ -318,31 +336,6 @@ class Ts:
         pk.payload = pes
         self.FILE_OUT.write(pk.tobyte())
 
-    # end
-
-    # adaption_field_control = 11 | <184 byte
-    def set_adaptation_fill_11(self,pid,pes):
-        pk = TsPacket()
-        pk.payload_unit_start_indicator = 1
-        pk.pid = pid
-        pk.transport_scrambling_control = 0
-        pk.adaptation_field_control = 3
-        if pid == self.VIDEO_PID:
-            pk.continuity_counter = self.VIDEO_COUNT % 16
-            self.VIDEO_COUNT += 1
-        elif pid == self.AUDIO_PID:
-            pk.continuity_counter = self.AUDIO_COUNT % 16
-            self.AUDIO_COUNT += 1
-        else:
-            raise Exception("错误的pid", pid)
-
-        pk.adaptation_field_length = 183 - len(pes)
-        pk.payload = pes  # - pes data
-
-        self.FILE_OUT.write(pk.tobyte()) 
-
-
-
     def set_pes(self,pcr_base, pcr_ext, pid, pes):
         # 填充pes
         self.set_adaptation_11(pcr_base, pcr_ext, pid, pes[:176])
@@ -350,60 +343,59 @@ class Ts:
         while len(pes) >= 184:
             self.set_adaptation_01(pid, pes[:184])
             pes = pes[184:]
-        self.set_adaptation_fill_11(pid, pes)
-        
-
+        if len(pes) > 0:
+            self.set_adaptation_fill_11(pid, pes)
 
     def __init__(self, in_file:str, out_file:str) -> None:
 
         self.FILE_IN = open(in_file, "rb") 
         self.FILE_OUT = open(out_file, "wb")
 
-        pes_video = bytearray()
-        pes_audio = bytearray()
-
-        pcr_base = 0
-        pcr_ext = 0
-
         self.FILE_OUT.write(SDT())
         self.FILE_OUT.write(PAT())
         self.FILE_OUT.write(PMT())
 
+        pes_video = bytearray()
+        pcr_base_v = 0
+        pcr_ext_v = 0
+
+        pes_audio = bytearray()
+        pcr_base_a = 0
+        pcr_ext_a = 0
+        
         while True:
             # 文件字节流转换为 Ts Pakcet
             i_pk = self.FILE_IN.read(188)
             if not i_pk:
+                # 最后一帧 视频
+                pes_pack = PesPacket(pes_video)
+                self.set_pes(pcr_base_v, pcr_ext_v, 0x100, pes_pack.tobyte())
+                # 最后一帧 音频
+                pes_pack = PesPacket(pes_audio)
+                self.set_pes(pcr_base_a, pcr_ext_a, 0x101, pes_pack.tobyte())
                 break
+            
             ts_pack = TsPacket(i_pk)
 
             if ts_pack.pid == 0x100:  # 视频
-                if ts_pack.payload_unit_start_indicator == 1 and len(pes_video) > 0:
+                if ts_pack.payload_unit_start_indicator == 1:
+                    if len(pes_video) > 0 : # 保存实际数据
+                        pes_pack = PesPacket(pes_video)
+                        self.set_pes(pcr_base_v, pcr_ext_v, ts_pack.pid, pes_pack.tobyte())
+                    pes_video = bytearray()
+                    pcr_base_v = ts_pack.pcr_base
+                    pcr_ext_v = ts_pack.pcr_extension
+                pes_video += ts_pack.payload
 
-                    pes_pack = PesPacket(pes_video)
-                    self.set_pes(pcr_base, pcr_ext, ts_pack.pid, pes_pack.tobyte())
-
-                    pes_video = ts_pack.payload  # 必须置空
-                else:
-                    pes_video += ts_pack.payload
             elif ts_pack.pid == 0x101:  # 音频
-                if ts_pack.payload_unit_start_indicator == 1 and len(pes_audio) > 0:
-
-                    pes_pack = PesPacket(pes_audio)
-                    # self.set_pes(pcr_base, pcr_ext, ts_pack.pid, pes_pack.tobyte())
-
-                    pes_audio = ts_pack.payload  # 必须置空
-                else:
-                    pes_audio += ts_pack.payload
-            if ts_pack.payload_unit_start_indicator == 1 and ts_pack.adaptation_field_control == 3:
-                pcr_base = ts_pack.pcr_base
-                pcr_ext = ts_pack.pcr_extension
-                # print(pcr_base, pcr_ext)
-
-
-if __name__ == "__main__":
-    Ts("file/in.ts", "out.ts")
-
-
+                if ts_pack.payload_unit_start_indicator == 1 :
+                    if len(pes_audio) > 0:
+                        pes_pack = PesPacket(pes_audio)
+                        self.set_pes(pcr_base_a, pcr_ext_a, ts_pack.pid, pes_pack.tobyte())
+                    pes_audio = bytearray()
+                    pcr_base_a = ts_pack.pcr_base
+                    pcr_ext_a = ts_pack.pcr_extension
+                pes_audio += ts_pack.payload
 
 
 def test_ts(filepath: str):
@@ -421,7 +413,7 @@ def test_ts(filepath: str):
 
 def test_pes(filepath: str):
 
-    fi = open("in.pes", "wb")
+    fi = open("fin.pes", "wb")
     fo = open("out.pes", "wb")
 
     pes_video = bytearray()
@@ -457,4 +449,8 @@ def test_pes(filepath: str):
                     pes_audio = ts_pack.payload  # 必须置空
                 else:
                     pes_audio += ts_pack.payload
+
+if __name__ == "__main__":
+    Ts("i.ts", "o.ts")
+    # pcr_base pcr_ext == 0 ? pcr_flag = 0 处理这个问题。
 
