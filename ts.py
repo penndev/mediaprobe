@@ -4,6 +4,7 @@
 格式较老 用于web封装显得冗杂 但是还是值得学习的视频概念
 
 参考文档：
+    - `https://www.etsi.org/deliver/etsi_i_ets/300400_300499/300468/02_30_113/ets_300468e02v.pdf`
     - `https://tsduck.io/download/docs/mpegts-introduction.pdf`
     - `https://www.itu.int/rec/T-REC-H.222.0`
     - `https://en.wikipedia.org/wiki/MPEG_transport_stream`
@@ -143,7 +144,6 @@ class PesPacket:
         pes[8+self.PES_header_data_length:] = self.payload
         return pes
 
-
 class TsPacket:
     def __init__(self, data: bytearray | None = None):
         '''
@@ -267,6 +267,50 @@ class TsPacket:
             raise Exception("错误的 数据长度")
         return data
 
+class TsServiceDescriptionTable:
+    def __init__(self, data: bytearray | None = None) -> None:
+        self.table_id = data[0]
+        self.section_syntax_indicator = data[1] >> 7
+        # self.reserved_future_use = (data[1] >> 6) & 1
+        # self.reserved = (data[1] >> 4) & 3
+        self.section_length = (data[1] & 0x0f) << 8
+        self.section_length += data[2] 
+        self.transport_stream_id = (data[3] << 8) + data[4]
+        # self.reserved = data[5] >> 6
+        self.version_number = (data[5] << 1) & 0x1f
+        self.current_next_indicator = data[5] & 1
+        self.section_number = data[6]
+        self.last_section_number = data[7]
+        self.original_network_id = (data[8] << 8) + data[9]
+        # self.reserved_future_use = data[10]
+        # 计算剩余字节
+        end = self.section_length + 3
+        forsection = data[11:end-4]
+
+        # for 
+        print(list(forsection))
+        service_id = forsection[0:2]
+        EIT_schedule_flag = (forsection[2] >> 1) & 1
+        EIT_present_following_flag = forsection[2]  & 1
+        running_status = forsection[3] >> 5
+        free_CA_mode = (forsection[3] >> 4) & 1 
+        descriptors_loop_length = forsection[3] & 0x0f
+
+
+        print(
+            service_id, 
+            EIT_schedule_flag, 
+            EIT_present_following_flag, 
+            running_status, 
+            free_CA_mode, 
+            descriptors_loop_length
+        )
+
+        # # 处理crc32
+        # crc_32 = int.from_bytes(data[end-4:end],"big") 
+        # print(end)
+
+
 class Ts:
     VIDEO_COUNT=0
     AUDIO_COUNT=0
@@ -302,8 +346,30 @@ class Ts:
         pk.payload = pes  # - pes data
         self.FILE_OUT.write(pk.tobyte())
 
+    # adaptation_field_control = 11 | 182 byte
+    def set_adaptation_11_pcr0(self, pid, pes):
+        pk = TsPacket()
+        pk.payload_unit_start_indicator = 1
+        pk.pid = pid
+        pk.transport_scrambling_control = 0
+        pk.adaptation_field_control = 3
+        if pid == self.VIDEO_PID:
+            pk.continuity_counter = self.VIDEO_COUNT % 16
+            self.VIDEO_COUNT += 1
+        elif pid == self.AUDIO_PID:
+            pk.continuity_counter = self.AUDIO_COUNT % 16
+            self.AUDIO_COUNT += 1
+        else:
+            raise Exception("错误的pid", pid)
+        # 
+        pk.adaptation_field_length = 183 - len(pes)
+        # pk.random_access_indicator = 1
+        pk.PCR_flag = 0
+        pk.payload = pes  # - pes data
+        self.FILE_OUT.write(pk.tobyte())
+
     # adaption_field_control = 11 | <184 byte
-    def set_adaptation_fill_11(self,pid,pes):
+    def set_adaptation_11_last(self,pid,pes):
         pk = TsPacket()
         pk.pid = pid
         pk.transport_scrambling_control = 0
@@ -337,14 +403,20 @@ class Ts:
         self.FILE_OUT.write(pk.tobyte())
 
     def set_pes(self,pcr_base, pcr_ext, pid, pes):
-        # 填充pes
-        self.set_adaptation_11(pcr_base, pcr_ext, pid, pes[:176])
-        pes = pes[176:]
+        # 第一帧
+        if pcr_base == 0 and pcr_ext == 0 :
+            self.set_adaptation_11_pcr0(pid, pes[:182])
+            pes = pes[182:]
+        else:
+            self.set_adaptation_11(pcr_base, pcr_ext, pid, pes[:176])
+            pes = pes[176:]
+        # 中间帧
         while len(pes) >= 184:
             self.set_adaptation_01(pid, pes[:184])
             pes = pes[184:]
+        # 最后帧
         if len(pes) > 0:
-            self.set_adaptation_fill_11(pid, pes)
+            self.set_adaptation_11_last(pid, pes)
 
     def __init__(self, in_file:str, out_file:str) -> None:
 
@@ -451,6 +523,21 @@ def test_pes(filepath: str):
                     pes_audio += ts_pack.payload
 
 if __name__ == "__main__":
-    Ts("i.ts", "o.ts")
-    # pcr_base pcr_ext == 0 ? pcr_flag = 0 处理这个问题。
+    tsp = TsPacket(SDT())
+    data = tsp.payload[1:]
+    sdt = TsServiceDescriptionTable(data)
+
+    print(
+        sdt.table_id, 
+        sdt.section_syntax_indicator, 
+        sdt.section_length, 
+        sdt.section_length, 
+        sdt.transport_stream_id, 
+        sdt.version_number, 
+        sdt.current_next_indicator, 
+        sdt.section_number, 
+        sdt.last_section_number, 
+        sdt.original_network_id, 
+    )
+
 
