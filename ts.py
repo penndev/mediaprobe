@@ -11,6 +11,95 @@
     - `https://dvd.sourceforge.net/dvdinfo/pes-hdr.html`
 '''
 
+class TsServiceDescriptionTable:
+    def __init__(self, data: bytearray | None = None) -> None:
+        self.table_id = data[0]
+        self.section_syntax_indicator = data[1] >> 7
+        # self.reserved_future_use = (data[1] >> 6) & 1
+        # self.reserved = (data[1] >> 4) & 3
+        self.section_length = (data[1] & 0x0f) << 8
+        self.section_length += data[2] 
+        self.transport_stream_id = (data[3] << 8) + data[4]
+        # self.reserved = data[5] >> 6
+        self.version_number = (data[5] >> 1) & 0x1f
+        self.current_next_indicator = data[5] & 1
+        self.section_number = data[6]
+        self.last_section_number = data[7]
+        self.original_network_id = (data[8] << 8) + data[9]
+        # self.reserved_future_use = data[10]
+        # 计算剩余字节
+        end = self.section_length + 3
+        section = data[11:end-4]
+
+        self.section_list = []
+        i = 0
+        while i < len(section):
+            section_map = {}
+            section_map["service_id"] = int.from_bytes(section[i:i+2], "big")
+            i += 2
+            section_map["EIT_schedule_flag"] = (section[i] >> 1) & 1
+            section_map["EIT_present_following_flag"] = section[i]  & 1
+            i += 1
+            section_map["running_status"] = section[i] >> 5
+            section_map["free_CA_mode"] = (section[i] >> 4) & 1
+            section_map["descriptors_loop_length"] = (section[i] & 0x0f) << 8
+            i += 1
+            section_map["descriptors_loop_length"] += section[i]
+            i += 1
+            descriptors = section[i:i+section_map["descriptors_loop_length"]]
+            i += section_map["descriptors_loop_length"]
+            section_map["descriptors"] = []
+            ii = 0
+            while ii < len(descriptors):
+                descriptors_map = {}
+                descriptors_map["descriptor_tag"] = descriptors[ii]
+                ii += 1
+                descriptors_map["descriptor_length"] = descriptors[ii]
+                ii += 1
+                descriptors_map["service_type"] = descriptors[ii]
+                ii += 1
+                descriptors_map["service_provider_name_length"] = descriptors[ii]
+                ii += 1
+                descriptors_map["service_provider_name"] = descriptors[ii:ii+descriptors_map["service_provider_name_length"]]
+                ii += descriptors_map["service_provider_name_length"]
+                descriptors_map["service_name_length"] = descriptors[ii]
+                ii += 1
+                descriptors_map["service_name"] = descriptors[ii:ii+descriptors_map["service_name_length"]]
+                ii += descriptors_map["service_name_length"]
+                section_map["descriptors"].append(descriptors_map)
+            self.section_list.append(section_map)
+        self.crc_32 = int.from_bytes(data[end-4:end],"big")
+
+    def tobyte(self):
+        data = bytearray([0]*11)
+        data[0] = self.table_id
+        data[1] = self.section_syntax_indicator << 7
+        data[1] |= 0x40
+        data[1] |= 3 << 4
+        data[1] |= ( self.section_length << 8 ) & 0x0f
+        data[2] = self.section_length & 0xff
+        data[3] = self.transport_stream_id >> 8
+        data[4] = self.transport_stream_id & 0xff
+        data[5] = 0xc0
+        data[5] |= self.version_number << 1
+        data[5] |= self.current_next_indicator 
+        data[6] = self.section_number
+        data[7] = self.last_section_number
+        data[8] = self.original_network_id >> 8
+        data[9] = self.original_network_id & 0xff
+        data[10] = 0xff
+
+        # 生成 section
+        for item_section in self.section_list:
+            for descriptors in item_section["descriptors"]:
+                print(descriptors)
+                # 生成数据
+
+        crc_32_byte = self.crc_32.to_bytes(4, "big")
+        data += crc_32_byte
+        return data
+        # 
+
 def SDT():
     bt = bytearray([0xff]*188)
     hex = [
@@ -267,48 +356,6 @@ class TsPacket:
             raise Exception("错误的 数据长度")
         return data
 
-class TsServiceDescriptionTable:
-    def __init__(self, data: bytearray | None = None) -> None:
-        self.table_id = data[0]
-        self.section_syntax_indicator = data[1] >> 7
-        # self.reserved_future_use = (data[1] >> 6) & 1
-        # self.reserved = (data[1] >> 4) & 3
-        self.section_length = (data[1] & 0x0f) << 8
-        self.section_length += data[2] 
-        self.transport_stream_id = (data[3] << 8) + data[4]
-        # self.reserved = data[5] >> 6
-        self.version_number = (data[5] << 1) & 0x1f
-        self.current_next_indicator = data[5] & 1
-        self.section_number = data[6]
-        self.last_section_number = data[7]
-        self.original_network_id = (data[8] << 8) + data[9]
-        # self.reserved_future_use = data[10]
-        # 计算剩余字节
-        end = self.section_length + 3
-        forsection = data[11:end-4]
-
-        # for 
-        print(list(forsection))
-        service_id = forsection[0:2]
-        EIT_schedule_flag = (forsection[2] >> 1) & 1
-        EIT_present_following_flag = forsection[2]  & 1
-        running_status = forsection[3] >> 5
-        free_CA_mode = (forsection[3] >> 4) & 1 
-        descriptors_loop_length = forsection[3] & 0x0f
-
-
-        print(
-            service_id, 
-            EIT_schedule_flag, 
-            EIT_present_following_flag, 
-            running_status, 
-            free_CA_mode, 
-            descriptors_loop_length
-        )
-
-        # # 处理crc32
-        # crc_32 = int.from_bytes(data[end-4:end],"big") 
-        # print(end)
 
 
 class Ts:
@@ -526,18 +573,5 @@ if __name__ == "__main__":
     tsp = TsPacket(SDT())
     data = tsp.payload[1:]
     sdt = TsServiceDescriptionTable(data)
-
-    print(
-        sdt.table_id, 
-        sdt.section_syntax_indicator, 
-        sdt.section_length, 
-        sdt.section_length, 
-        sdt.transport_stream_id, 
-        sdt.version_number, 
-        sdt.current_next_indicator, 
-        sdt.section_number, 
-        sdt.last_section_number, 
-        sdt.original_network_id, 
-    )
-
+    sdt.tobyte()
 
