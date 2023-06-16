@@ -13,6 +13,8 @@
 
 class TsServiceDescriptionTable:
     def __init__(self, data: bytearray | None = None) -> None:
+        if data is None:
+            return 
         self.table_id = data[0]
         self.section_syntax_indicator = data[1] >> 7
         # self.reserved_future_use = (data[1] >> 6) & 1
@@ -88,30 +90,71 @@ class TsServiceDescriptionTable:
         data[8] = self.original_network_id >> 8
         data[9] = self.original_network_id & 0xff
         data[10] = 0xff
-
         # 生成 section
         for item_section in self.section_list:
+            item_section_byte = bytearray([0] * 5)
+            item_section_byte[0] = (item_section["service_id"] >> 8) & 0xff
+            item_section_byte[1] = item_section["service_id"] & 0xff
+            item_section_byte[2] = 0xfc
+            item_section_byte[2] |= item_section["EIT_schedule_flag"] << 1
+            item_section_byte[2] |= item_section["EIT_present_following_flag"] 
+            item_section_byte[3] = item_section["running_status"] << 5
+            item_section_byte[3] |= item_section["free_CA_mode"] << 4
+            item_section_byte[3] |= item_section["descriptors_loop_length"] >> 8
+            item_section_byte[4] = item_section["descriptors_loop_length"] & 0xff
+            data += item_section_byte
             for descriptors in item_section["descriptors"]:
-                print(descriptors)
+                descriptors_byte = bytearray([0] * 4)
+                descriptors_byte[0] = descriptors["descriptor_tag"]
+                descriptors_byte[1] = descriptors["descriptor_length"]
+                descriptors_byte[2] = descriptors["service_type"]
+                descriptors_byte[3] = descriptors["service_provider_name_length"]
+                descriptors_byte += descriptors["service_provider_name"]
+                descriptors_byte += bytearray([descriptors["service_name_length"]])
+                descriptors_byte += descriptors["service_name"]
                 # 生成数据
-
+                data += descriptors_byte
         crc_32_byte = self.crc_32.to_bytes(4, "big")
         data += crc_32_byte
         return data
         # 
 
-def SDT():
-    bt = bytearray([0xff]*188)
-    hex = [
-        0x47, 0x40, 0x11, 0x10, 
-        0x00, 0x42, 0xF0, 0x25, 0x00, 0x01, 0xC1, 0x00, 0x00, 0xFF, 
-        0x01, 0xFF, 0x00, 0x01, 0xFC, 0x80, 0x14, 0x48, 0x12, 0x01, 
-        0x06, 0x46, 0x46, 0x6D, 0x70, 0x65, 0x67, 0x09, 0x53, 0x65, 
-        0x72, 0x76, 0x69, 0x63, 0x65, 0x30, 0x31, 0x77, 0x7C, 0x43, 
-        0xCA
-    ]
-    bt[0:45] = hex
-    return bt
+    def genSDT(self):
+        self.table_id = 66
+        self.section_syntax_indicator = 1
+        self.section_length = 37
+        self.transport_stream_id = 1
+        self.version_number = 0
+        self.current_next_indicator = 1
+        self.section_number = 0
+        self.last_section_number = 0
+        self.original_network_id = 65281
+        self.section_list = [
+            {
+                'service_id': 1, 
+                'EIT_schedule_flag': 0, 
+                'EIT_present_following_flag': 0, 
+                'running_status': 4, 
+                'free_CA_mode': 0, 
+                'descriptors_loop_length': 20, 
+                'descriptors': [
+                    {
+                        'descriptor_tag': 72, 
+                        'descriptor_length': 18, 
+                        'service_type': 1, 
+                        'service_provider_name_length': 6, 
+                        'service_provider_name': bytearray(b'FFmpeg'), 
+                        'service_name_length': 9, 
+                        'service_name': bytearray(b'Service01')
+                    }
+                ]
+            }
+        ]
+        self.crc_32 = 2004632522
+        sdt_byte = bytearray([0x47, 0x40, 0x11, 0x10, 0x00]) + self.tobyte()
+        data = bytearray([0xff]*188)
+        data[0:len(sdt_byte)] = sdt_byte
+        return data
 
 def PAT():
     bt = bytearray([0xff]*188)
@@ -356,8 +399,6 @@ class TsPacket:
             raise Exception("错误的 数据长度")
         return data
 
-
-
 class Ts:
     VIDEO_COUNT=0
     AUDIO_COUNT=0
@@ -470,7 +511,7 @@ class Ts:
         self.FILE_IN = open(in_file, "rb") 
         self.FILE_OUT = open(out_file, "wb")
 
-        self.FILE_OUT.write(SDT())
+        self.FILE_OUT.write(TsServiceDescriptionTable().genSDT())
         self.FILE_OUT.write(PAT())
         self.FILE_OUT.write(PMT())
 
@@ -570,8 +611,5 @@ def test_pes(filepath: str):
                     pes_audio += ts_pack.payload
 
 if __name__ == "__main__":
-    tsp = TsPacket(SDT())
-    data = tsp.payload[1:]
-    sdt = TsServiceDescriptionTable(data)
-    sdt.tobyte()
+    pass
 
