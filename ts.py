@@ -4,11 +4,15 @@
 格式较老 用于web封装显得冗杂 但是还是值得学习的视频概念
 
 参考文档：
-    - `https://www.etsi.org/deliver/etsi_i_ets/300400_300499/300468/02_30_113/ets_300468e02v.pdf`
+    > ISO/IEC 13818-1 2.6.9 标准
+    - `https://www.itu.int/rec/T-REC-H.222.0-199507-S` [国际电联标准文档]
+    - `https://en.wikipedia.org/wiki/MPEG_transport_stream` [ts的数据结构]
+    - `https://dvd.sourceforge.net/dvdinfo/pes-hdr.html` [pes的数据结构]
+    
+    > 可参考不详细
     - `https://tsduck.io/download/docs/mpegts-introduction.pdf`
-    - `https://www.itu.int/rec/T-REC-H.222.0`
-    - `https://en.wikipedia.org/wiki/MPEG_transport_stream`
-    - `https://dvd.sourceforge.net/dvdinfo/pes-hdr.html`
+    - `https://www.etsi.org/deliver/etsi_i_ets/300400_300499/300468/02_30_113/ets_300468e02v.pdf`
+    - `https://www.etsi.org/deliver/etsi_en/300400_300499/300468/01.13.01_40/en_300468v011301o.pdf
 '''
 
 class TsServiceDescriptionTable:
@@ -71,6 +75,7 @@ class TsServiceDescriptionTable:
                 section_map["descriptors"].append(descriptors_map)
             self.section_list.append(section_map)
         self.crc_32 = int.from_bytes(data[end-4:end],"big")
+
 
     def tobyte(self):
         data = bytearray([0]*11)
@@ -156,22 +161,153 @@ class TsServiceDescriptionTable:
         data[0:len(sdt_byte)] = sdt_byte
         return data
 
-def PAT():
-    bt = bytearray([0xff]*188)
-    hex = [
-        0x47, 0x40, 0x00, 0x10, #ts packet hd
-        0x00, #adaption
-        0x00, 0xB0, 0x0D, 0x00, 0x01, 0xC1, 0x00, 0x00, 0x00, 0x01, 
-        0xF0, 0x00, 0x2A, 0xB1, 0x04, 0xB2
-    ]
-    bt[0:21] = hex
-    return bt
+class TsProgramAssociationTable:
+    def __init__(self, data: bytearray | None = None) -> None:
+        if data is None:
+            return 
+        self.table_id = data[0]
+        self.section_syntax_indicator = data[1] >> 7
+        self.section_length = (data[1] & 0x0f) << 8
+        self.section_length += data[2] 
+        self.transport_stream_id = (data[3] << 8) + data[4]
+        self.version_number = (data[5] >> 1) & 0x1f
+        self.current_next_indicator = data[5] & 1
+        self.section_number = data[6]
+        self.last_section_number = data[7]
+        self.program_number = (data[8] << 8) + data[9]
+        self.program_map_PID = ((data[10] & 0x1f) << 8) + data[11]
+
+        end = self.section_length + 3
+        self.crc_32 = int.from_bytes(data[end-4:end],"big")
+
+    def tobyte(self):
+        data = bytearray([0]*12)
+        data[0] = self.table_id
+        data[1] = 0xb0 | (( self.section_length >> 8 ) & 0x0f)
+        data[2] = self.section_length & 0xff
+        data[3] = self.transport_stream_id >> 8
+        data[4] = self.transport_stream_id & 0xff
+        data[5] = 0xc0 | (self.version_number << 1)
+        data[5] |= self.current_next_indicator 
+        data[6] = self.section_number
+        data[7] = self.last_section_number
+        data[8] = self.program_number >> 8
+        data[9] = self.program_number & 0xff
+        data[10] = (self.program_map_PID >> 8) | 0xe0
+        data[11] = self.program_map_PID & 0xff
+        crc_32_byte = self.crc_32.to_bytes(4, "big")
+        data += crc_32_byte
+        return data
+
+    def genPAT(self):
+        self.table_id = 0
+        self.section_syntax_indicator = 1
+        self.section_length = 13
+        self.transport_stream_id = 1
+        self.version_number = 0
+        self.current_next_indicator = 1
+        self.section_number = 0
+        self.last_section_number = 0
+        self.program_number = 1
+        self.program_map_PID = 4096
+        self.crc_32 = 716244146
+        pat_byte = self.tobyte()
+        data = bytearray([0xff] * 188)
+        data[:5] = [0x47, 0x40, 0x00, 0x10,  0x00]
+        data[5:5+len(pat_byte)] = pat_byte
+        return data
+
+class TsProgramMapTable:
+    def __init__(self, data: bytearray | None = None) -> None:
+        if data is None:
+            return 
+        self.table_id = data[0]
+        self.section_syntax_indicator = data[1] >> 7
+        self.section_length = (data[1] & 0x0f) << 8
+        self.section_length += data[2] 
+        self.transport_stream_id = (data[3] << 8) + data[4]
+        self.version_number = (data[5] >> 1) & 0x1f
+        self.current_next_indicator = data[5] & 1
+        self.section_number = data[6]
+        self.last_section_number = data[7]
+        self.PCR_PID = ((data[8] & 0x1f) << 8) | data[9]
+        self.program_info_length = (data[10] & 0x0f << 8) | data[11]
+
+        end = self.section_length + 3
+        program = data[12:end-4]
+
+        self.program_list = []
+        i = 0
+        while i < len(program):
+            program_map = {}
+            program_map["stream_type"] = program[i]
+            i += 1
+            program_map["elementary_PID"] = ((program[i] & 0x1f) << 8) | program[i+1]
+            i += 2
+            program_map["ES_info_length"] = (program[i] & 0x0f << 8) | program[i+1]
+            i += 2 
+            i += program_map["ES_info_length"]
+            self.program_list.append(program_map)
+        self.crc_32 = int.from_bytes(data[end-4:end],"big")
+
+    def tobyte(self):
+        data = bytearray([0]*12)
+        data[0] = self.table_id
+        data[1] = 0xb0
+        data[1] |= ( self.section_length << 8 ) & 0x0f
+        data[2] = self.section_length & 0xff
+        data[3] = self.transport_stream_id >> 8
+        data[4] = self.transport_stream_id & 0xff
+        data[5] = 0xc0
+        data[5] |= self.version_number << 1
+        data[5] |= self.current_next_indicator 
+        data[6] = self.section_number
+        data[7] = self.last_section_number
+        data[8] = (self.PCR_PID >> 8) | 0xe0
+        data[9] = self.PCR_PID & 0xff
+        data[10] = (self.program_info_length >> 8) | 0xf0
+        data[11] = self.program_info_length & 0xff
+
+        for program_map in self.program_list:
+            program_byte = bytearray([0] * 5)
+            program_byte[0] = program_map["stream_type"]
+            program_byte[1] = (program_map["elementary_PID"] >> 8) | 0xe0
+            program_byte[2] = program_map["elementary_PID"] & 0xff
+            program_byte[3] = (program_map["ES_info_length"] >> 8) | 0xf0
+            program_byte[4] = program_map["ES_info_length"] & 0xff
+            program_byte += bytearray([0]*program_map["ES_info_length"])
+            data += program_byte
+
+        crc_32_byte = self.crc_32.to_bytes(4, "big")
+        data += crc_32_byte
+        return data        
+
+    def genPMT(self):
+        self.table_id = 2
+        self.section_syntax_indicator = 1
+        self.section_length = 23
+        self.transport_stream_id = 1
+        self.version_number = 0
+        self.current_next_indicator = 1
+        self.section_number = 0
+        self.last_section_number = 0
+        self.PCR_PID = 256
+        self.program_info_length = 0
+        self.program_list = [
+            {'stream_type': 27, 'elementary_PID': 256, 'ES_info_length': 0}, 
+            {'stream_type': 15, 'elementary_PID': 257, 'ES_info_length': 0}
+        ]
+        self.crc_32 = 793033115
+        pmt_byte = bytearray([0x47, 0x50, 0x00, 0x10, 0x00]) + self.tobyte()
+        data = bytearray([0xff]*188)
+        data[:len(pmt_byte)] = pmt_byte
+        return data
+
 
 def PMT():
     bt = bytearray([0xff]*188)
     hex = [
-        0x47, 0x50, 0x00, 0x10,
-        0x00,
+        0x47, 0x50, 0x00, 0x10, 0x00,
         0x02, 0xB0, 0x17, 0x00, 0x01, 0xC1, 0x00, 0x00, 0xE1, 0x00,
         0xF0, 0x00, 0x1B, 0xE1, 0x00, 0xF0, 0x00, 0x0F, 0xE1, 0x01,
         0xF0, 0x00, 0x2F, 0x44, 0xB9, 0x9B
@@ -512,8 +648,9 @@ class Ts:
         self.FILE_OUT = open(out_file, "wb")
 
         self.FILE_OUT.write(TsServiceDescriptionTable().genSDT())
-        self.FILE_OUT.write(PAT())
-        self.FILE_OUT.write(PMT())
+        self.FILE_OUT.write(TsProgramAssociationTable().genPAT())
+        self.FILE_OUT.write(TsProgramMapTable().genPMT())
+        # self.FILE_OUT.write(PMT())
 
         pes_video = bytearray()
         pcr_base_v = 0
@@ -611,5 +748,6 @@ def test_pes(filepath: str):
                     pes_audio += ts_pack.payload
 
 if __name__ == "__main__":
-    pass
+    Ts("i.ts", "o.ts")
+
 
