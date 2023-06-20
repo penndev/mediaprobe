@@ -15,6 +15,18 @@
     - `https://www.etsi.org/deliver/etsi_en/300400_300499/300468/01.13.01_40/en_300468v011301o.pdf
 '''
 
+# 计算psi/si的crc32方法
+def calculate_crc32(data):
+    crc = 0xFFFFFFFF
+    for byte in data:
+        crc ^= byte << 24
+        for _ in range(8):
+            if crc & 0x80000000:
+                crc = (crc << 1) ^ 0x04C11DB7
+            else:
+                crc <<= 1
+    return crc & 0xFFFFFFFF
+
 class TsServiceDescriptionTable:
     def __init__(self, data: bytearray | None = None) -> None:
         if data is None:
@@ -302,19 +314,6 @@ class TsProgramMapTable:
         data = bytearray([0xff]*188)
         data[:len(pmt_byte)] = pmt_byte
         return data
-
-
-def PMT():
-    bt = bytearray([0xff]*188)
-    hex = [
-        0x47, 0x50, 0x00, 0x10, 0x00,
-        0x02, 0xB0, 0x17, 0x00, 0x01, 0xC1, 0x00, 0x00, 0xE1, 0x00,
-        0xF0, 0x00, 0x1B, 0xE1, 0x00, 0xF0, 0x00, 0x0F, 0xE1, 0x01,
-        0xF0, 0x00, 0x2F, 0x44, 0xB9, 0x9B
-    ]
-    bt[0:31] = hex
-    return bt
-
 
 class PesPacket:
     @staticmethod
