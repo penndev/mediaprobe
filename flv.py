@@ -87,7 +87,6 @@ class FLV:
             readCount += tag.dataSize + 4
             self.tags.append(tag)
 
-
 if __name__ == "__main__":
     import ts
     H264DefaultHZ = 90
