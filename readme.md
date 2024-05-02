@@ -30,11 +30,7 @@ ffmpeg -i out.h264 -i out.aac -c:v copy -c:a copy output.mp4
 - SI帧 （Switching I Picture） 
 
 
-- h.264官方文档 https://www.itu.int/rec/T-REC-H.264
+- **H.26X官方文档**
 
-
-- mpeg-ts 分析工具 https://www.easyice.cn/
-
-- 面向开发者的视频调试工具 https://www.elecard.com/
-
-- h264 NAL https://sourceforge.net/projects/h264streamanalysis/files/binary/
+- https://www.itu.int/itu-t/recommendations/rec.aspx?rec=H.264
+- https://www.itu.int/itu-t/recommendations/rec.aspx?rec=H.265
